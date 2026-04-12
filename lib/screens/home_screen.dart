@@ -38,7 +38,10 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            HomeHeader(showContent: _currentIndex == 0),
+            HomeHeader(
+              showContent: _currentIndex == 0,
+              showSearch: _currentIndex == 0,
+            ),
             if (_currentIndex != 0) ...[
               const SizedBox(height: 16),
               pages[_currentIndex],

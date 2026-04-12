@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 
 class HomeHeader extends StatefulWidget {
   final bool showContent;
+  final bool showSearch;
 
-  const HomeHeader({super.key, this.showContent = true});
+  const HomeHeader({super.key, this.showContent = true, this.showSearch = true});
 
   @override
   State<HomeHeader> createState() => _HomeHeaderState();
@@ -273,11 +274,13 @@ class _HomeHeaderState extends State<HomeHeader>
                   ),
                 ),
                 const SizedBox(width: 8),
-                _HeaderIconButton(
-                  icon: Icons.search,
-                  onTap: () => setState(() => _showSearch = !_showSearch),
-                ),
-                const SizedBox(width: 10),
+                if (widget.showSearch) ...[
+                  _HeaderIconButton(
+                    icon: Icons.search,
+                    onTap: () => setState(() => _showSearch = !_showSearch),
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 _HeaderIconButton(
                   onTap: _openLanguageSheet,
                   child: _LangFlag(
@@ -289,54 +292,56 @@ class _HomeHeaderState extends State<HomeHeader>
             ),
           ),
 
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 520),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) {
-              final slide = Tween<Offset>(
-                begin: const Offset(0, -0.08),
-                end: Offset.zero,
-              ).animate(animation);
-              return SizeTransition(
-                sizeFactor: animation,
-                axisAlignment: -1,
-                child: FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: slide,
-                    child: child,
+          if (widget.showSearch)
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 520),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                final slide = Tween<Offset>(
+                  begin: const Offset(0, -0.08),
+                  end: Offset.zero,
+                ).animate(animation);
+                return SizeTransition(
+                  sizeFactor: animation,
+                  axisAlignment: -1,
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: slide,
+                      child: child,
+                    ),
                   ),
-                ),
-              );
-            },
-            child: _showSearch
-                ? Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: SizedBox(
-                      height: 42,
-                      child: TextField(
-                        style: const TextStyle(color: primaryGreen, fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: 'Mahsulot qidirish...',
-                          hintStyle:
-                              TextStyle(color: primaryGreen.withOpacity(0.6)),
-                          prefixIcon:
-                              const Icon(Icons.search, color: primaryGreen),
-                          filled: true,
-                          fillColor: const Color(0xFFF2F4F3),
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 12),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide.none,
+                );
+              },
+              child: _showSearch
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: SizedBox(
+                        height: 42,
+                        child: TextField(
+                          style:
+                              const TextStyle(color: primaryGreen, fontSize: 14),
+                          decoration: InputDecoration(
+                            hintText: 'Mahsulot qidirish...',
+                            hintStyle:
+                                TextStyle(color: primaryGreen.withOpacity(0.6)),
+                            prefixIcon:
+                                const Icon(Icons.search, color: primaryGreen),
+                            filled: true,
+                            fillColor: const Color(0xFFF2F4F3),
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 12),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  )
-                : const SizedBox.shrink(),
-          ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
 
           if (widget.showContent) ...[
             const SizedBox(height: 20),

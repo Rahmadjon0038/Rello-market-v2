@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hello_flutter_app/screens/pick_location_screen.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 class CartScreen extends StatefulWidget {
@@ -29,10 +31,22 @@ class _CartScreenState extends State<CartScreen> {
     ),
   ];
   String _payMethod = 'Click';
-  String _receiverName = 'Mening profilim';
-  String _receiverPhone = '+998';
+  final List<_Receiver> _receivers = [];
+  int _selectedReceiver = -1;
   String _deliveryPlace = 'Manzil tanlanmagan';
   LatLng? _deliveryPoint;
+  
+  void _removeReceiver(int index) {
+    setState(() {
+      if (index < 0 || index >= _receivers.length) return;
+      _receivers.removeAt(index);
+      if (_receivers.isEmpty) {
+        _selectedReceiver = -1;
+      } else {
+        _selectedReceiver = 0;
+      }
+    });
+  }
 
   int _total() {
     int sum = 0;
@@ -84,8 +98,9 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   void _openReceiverModal() {
-    final nameCtrl = TextEditingController(text: _receiverName);
-    final phoneCtrl = TextEditingController(text: _receiverPhone);
+    final firstCtrl = TextEditingController();
+    final lastCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -108,7 +123,7 @@ class _CartScreenState extends State<CartScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Buyurtmani oluvchi',
+                  'Yangi buyurtma oluvchi',
                   style: TextStyle(
                     color: Color(0xFF0F2F2B),
                     fontSize: 16,
@@ -117,9 +132,17 @@ class _CartScreenState extends State<CartScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: nameCtrl,
+                  controller: firstCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'Ism familiya',
+                    labelText: 'Ism',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: lastCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Familiya',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -145,13 +168,18 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                     ),
                     onPressed: () {
+                      if (firstCtrl.text.trim().isEmpty ||
+                          lastCtrl.text.trim().isEmpty ||
+                          phoneCtrl.text.trim().isEmpty) {
+                        return;
+                      }
                       setState(() {
-                        _receiverName = nameCtrl.text.trim().isEmpty
-                            ? _receiverName
-                            : nameCtrl.text.trim();
-                        _receiverPhone = phoneCtrl.text.trim().isEmpty
-                            ? _receiverPhone
-                            : phoneCtrl.text.trim();
+                        _receivers.add(_Receiver(
+                          firstName: firstCtrl.text.trim(),
+                          lastName: lastCtrl.text.trim(),
+                          phone: phoneCtrl.text.trim(),
+                        ));
+                        _selectedReceiver = _receivers.length - 1;
                       });
                       Navigator.pop(ctx);
                     },
@@ -171,8 +199,64 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   void _openDeliveryModal() {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Yetkazib berish joyi',
+                  style: TextStyle(
+                    color: Color(0xFF0F2F2B),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _PayOption(
+                  title: 'Xarita orqali tanlash',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openMapPicker();
+                  },
+                ),
+                const SizedBox(height: 8),
+                _PayOption(
+                  title: 'Hozirgi joyim (GPS)',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _useCurrentLocation();
+                  },
+                ),
+                const SizedBox(height: 8),
+                _PayOption(
+                  title: "Manzilni qo'lda yozish",
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openManualAddress();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openMapPicker() {
     Navigator.of(context)
-        .push<_PickResult>(
+        .push<PickResult>(
       MaterialPageRoute(
         builder: (_) => PickLocationScreen(initial: _deliveryPoint),
       ),
@@ -186,6 +270,210 @@ class _CartScreenState extends State<CartScreen> {
             : result.address;
       });
     });
+  }
+
+  Future<void> _useCurrentLocation() async {
+    try {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Joy aniqlanmoqda...')),
+        );
+      }
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showLocationDialog(
+          title: 'Location o‘chiq',
+          message: 'Location yoqing va qayta urinib ko‘ring.',
+          openSettings: Geolocator.openLocationSettings,
+        );
+        return;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        _showLocationDialog(
+          title: 'Location ruxsati yo‘q',
+          message: 'Ruxsat berish uchun sozlamalarga kiring.',
+          openSettings: Geolocator.openAppSettings,
+        );
+        return;
+      }
+      Position? pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 10),
+        );
+      } catch (_) {
+        pos = await Geolocator.getLastKnownPosition();
+      }
+      if (pos == null) {
+        _showLocationDialog(
+          title: 'Joy aniqlanmadi',
+          message:
+              'Location topilmadi. GPS yoqilganini tekshiring va qayta urinib ko‘ring.',
+          openSettings: Geolocator.openLocationSettings,
+        );
+        return;
+      }
+      final point = LatLng(pos.latitude, pos.longitude);
+      String address = '';
+      try {
+        final placemarks =
+            await placemarkFromCoordinates(point.latitude, point.longitude);
+        if (placemarks.isNotEmpty) {
+          final m = placemarks.first;
+          final parts = <String>[
+            if ((m.street ?? '').isNotEmpty) m.street!,
+            if ((m.locality ?? '').isNotEmpty) m.locality!,
+            if ((m.administrativeArea ?? '').isNotEmpty) m.administrativeArea!,
+          ];
+          address = parts.join(', ');
+        }
+      } catch (_) {}
+      setState(() {
+        _deliveryPoint = point;
+        _deliveryPlace = address.isEmpty
+            ? 'Lat: ${point.latitude.toStringAsFixed(5)}, Lng: ${point.longitude.toStringAsFixed(5)}'
+            : address;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Joy tanlandi')),
+        );
+      }
+    } catch (_) {}
+  }
+
+  void _openManualAddress() {
+    final cityCtrl = TextEditingController();
+    final streetCtrl = TextEditingController();
+    final homeCtrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              MediaQuery.of(ctx).viewInsets.bottom + 16,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "Manzilni qo'lda yozish",
+                    style: TextStyle(
+                      color: Color(0xFF0F2F2B),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: cityCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Shahar',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: streetCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Ko‘cha',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: homeCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Uy / kvartira',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F2F2B),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () {
+                      final city = cityCtrl.text.trim();
+                      final street = streetCtrl.text.trim();
+                      final home = homeCtrl.text.trim();
+                      final parts = [city, street, home]
+                          .where((e) => e.isNotEmpty)
+                          .toList();
+                      if (parts.isEmpty) return;
+                      setState(() {
+                        _deliveryPlace = parts.join(', ');
+                      });
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text(
+                      'Saqlash',
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showLocationDialog({
+    required String title,
+    required String message,
+    required Future<bool> Function() openSettings,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Bekor'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await openSettings();
+              },
+              child: const Text('Sozlamalar'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _openPaySummary() {
@@ -231,8 +519,72 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                     ),
                     onPressed: () {},
+                    child: Text(
+                      _payMethod == "Mahsulotni olgandan so'ng"
+                          ? "Buyurtmani tasdiqlash"
+                          : "To'lash",
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showOrderSuccess() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.check_circle,
+                    color: Colors.green, size: 64),
+                const SizedBox(height: 12),
+                const Text(
+                  'Buyurtmangiz qabul qilindi',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFF0F2F2B),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  "Buyurtma uchun rahmat. Uni tez orada yetkazib berishadi.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFF3D4B48),
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F2F2B),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(ctx),
                     child: const Text(
-                      "To'lash",
+                      'Tushunarli',
                       style:
                           TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                     ),
@@ -249,6 +601,27 @@ class _CartScreenState extends State<CartScreen> {
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF0F2F2B);
+    final currentReceiver =
+        _selectedReceiver >= 0 ? _receivers[_selectedReceiver] : null;
+    final canOrder = _items.any((e) => e.selected) &&
+        (currentReceiver?.fullName.trim().isNotEmpty ?? false) &&
+        (currentReceiver?.phone.trim().length ?? 0) > 3 &&
+        _deliveryPlace != 'Manzil tanlanmagan' &&
+        _payMethod.trim().isNotEmpty;
+
+    String? _missingField() {
+      if (!_items.any((e) => e.selected)) return 'Mahsulot tanlanmagan';
+      if (currentReceiver == null ||
+          currentReceiver.fullName.trim().isEmpty ||
+          currentReceiver.phone.trim().length <= 3) {
+        return 'Buyurtma oluvchi yo‘q';
+      }
+      if (_deliveryPlace == 'Manzil tanlanmagan') {
+        return 'Yetkazib berish manzili yo‘q';
+      }
+      if (_payMethod.trim().isEmpty) return 'To‘lov usuli tanlanmagan';
+      return null;
+    }
 
     if (_items.isEmpty) {
       return Padding(
@@ -332,16 +705,47 @@ class _CartScreenState extends State<CartScreen> {
             ),
             child: Column(
               children: [
-                _SectionCard(
-                  title: 'Buyurtmani oluvchi',
-                  value: '$_receiverName\n$_receiverPhone',
-                  onTap: _openReceiverModal,
+                SizedBox(
+                  height: 46,
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _openReceiverModal,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryGreen,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.person_add, size: 20),
+                    label: const Text(
+                      'Buyurtmani oluvchi',
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
+                Column(
+                  children: List.generate(_receivers.length, (i) {
+                    final r = _receivers[i];
+                    final selected = i == _selectedReceiver;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _PayOption(
+                        title: '${r.fullName} • ${r.phone}',
+                        selected: selected,
+                        onTap: () => setState(() => _selectedReceiver = i),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 4),
                 _SectionCard(
                   title: 'Yetkazib berish joyi',
                   value: _deliveryPlace,
                   onTap: _openDeliveryModal,
+                  showChevron: false,
                 ),
                 const SizedBox(height: 12),
                 const Align(
@@ -394,17 +798,17 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                     ),
                     onPressed: () {
-                      final hasSelected = _items.any((e) => e.selected);
-                      if (!hasSelected) {
+                      final missing = _missingField();
+                      if (missing != null) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Maxsulotlarni belgilang'),
+                          SnackBar(
+                            content: Text(missing),
                             duration: Duration(seconds: 2),
                           ),
                         );
                         return;
                       }
-                      _openPaySummary();
+                      _showOrderSuccess();
                     },
                     child: const Text(
                       'Buyurtma berish',
@@ -734,11 +1138,15 @@ class _SectionCard extends StatelessWidget {
   final String title;
   final String value;
   final VoidCallback onTap;
+  final bool showChevron;
+  final Widget? trailing;
 
   const _SectionCard({
     required this.title,
     required this.value,
     required this.onTap,
+    this.showChevron = true,
+    this.trailing,
   });
 
   @override
@@ -775,16 +1183,35 @@ class _SectionCard extends StatelessWidget {
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
+                    softWrap: true,
+                    overflow: TextOverflow.visible,
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: Color(0xFF0F2F2B)),
+            if (trailing != null)
+              trailing!
+            else if (showChevron)
+              const Icon(Icons.chevron_right, color: Color(0xFF0F2F2B)),
           ],
         ),
       ),
     );
   }
+}
+
+class _Receiver {
+  final String firstName;
+  final String lastName;
+  final String phone;
+
+  const _Receiver({
+    required this.firstName,
+    required this.lastName,
+    required this.phone,
+  });
+
+  String get fullName => '$firstName $lastName';
 }
 
 class _ImagePreview extends StatelessWidget {
