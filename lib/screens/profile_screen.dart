@@ -11,11 +11,46 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen>
+    with SingleTickerProviderStateMixin {
   String _name = 'Akmal Karimov';
   String _phone = '+998 90 123 45 67';
   File? _avatarFile;
   final ImagePicker _picker = ImagePicker();
+
+  AnimationController _createBottomSheetController() {
+    return AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+      reverseDuration: const Duration(milliseconds: 150),
+    );
+  }
+
+  Future<T?> _showFastBottomSheet<T>({
+    required WidgetBuilder builder,
+    bool isScrollControlled = false,
+    bool showDragHandle = true,
+    bool isDismissible = true,
+    bool enableDrag = true,
+    bool useRootNavigator = false,
+    Color? backgroundColor,
+    ShapeBorder? shape,
+  }) {
+    final controller = _createBottomSheetController();
+    final future = showModalBottomSheet<T>(
+      context: context,
+      isScrollControlled: isScrollControlled,
+      showDragHandle: showDragHandle,
+      isDismissible: isDismissible,
+      enableDrag: enableDrag,
+      useRootNavigator: useRootNavigator,
+      backgroundColor: backgroundColor,
+      shape: shape,
+      transitionAnimationController: controller,
+      builder: builder,
+    );
+    return future.whenComplete(controller.dispose);
+  }
 
   String get _initials {
     final parts = _name.trim().split(RegExp(r'\s+'));
@@ -35,10 +70,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _openEditProfile() {
     final nameCtrl = TextEditingController(text: _name);
     final phoneCtrl = TextEditingController(text: _phone);
-    showModalBottomSheet(
-      context: context,
+    _showFastBottomSheet(
       isScrollControlled: true,
       showDragHandle: true,
+      useRootNavigator: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -127,7 +162,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ? _phone
                             : phoneCtrl.text.trim();
                       });
-                      Navigator.pop(ctx);
+                      Navigator.of(context, rootNavigator: true).pop();
                     },
                     child: const Text(
                       'Saqlash',

@@ -142,8 +142,7 @@ class _PickLocationScreenState extends State<PickLocationScreen>
     required String message,
     required Future<bool> Function() openSettings,
   }) {
-    showDialog(
-      context: context,
+    _showFastDialog(
       builder: (ctx) {
         return AlertDialog(
           title: Text(title),
@@ -161,6 +160,36 @@ class _PickLocationScreenState extends State<PickLocationScreen>
               child: const Text('Sozlamalar'),
             ),
           ],
+        );
+      },
+    );
+  }
+
+  Future<T?> _showFastDialog<T>({
+    required WidgetBuilder builder,
+    bool barrierDismissible = true,
+  }) {
+    return showGeneralDialog<T>(
+      context: context,
+      barrierDismissible: barrierDismissible,
+      barrierLabel:
+          MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 150),
+      pageBuilder: (ctx, _, __) {
+        return SafeArea(
+          child: Builder(builder: builder),
+        );
+      },
+      transitionBuilder: (ctx, anim, __, child) {
+        final curved =
+            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.98, end: 1.0).animate(curved),
+            child: child,
+          ),
         );
       },
     );

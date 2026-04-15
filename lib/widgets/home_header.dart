@@ -146,8 +146,8 @@ class _HomeHeaderState extends State<HomeHeader>
     const primaryGreen = Color(0xFF0F2F2B);
     _sheetController ??= AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 520),
-      reverseDuration: const Duration(milliseconds: 380),
+      duration: const Duration(milliseconds: 160),
+      reverseDuration: const Duration(milliseconds: 110),
     );
 
     showModalBottomSheet(
@@ -162,7 +162,7 @@ class _HomeHeaderState extends State<HomeHeader>
         return SafeArea(
           child: TweenAnimationBuilder<double>(
             tween: Tween(begin: 0.0, end: 1.0),
-            duration: const Duration(milliseconds: 520),
+            duration: const Duration(milliseconds: 160),
             curve: Curves.easeOutCubic,
             builder: (context, value, child) {
               return Opacity(
@@ -294,7 +294,7 @@ class _HomeHeaderState extends State<HomeHeader>
 
           if (widget.showSearch)
             AnimatedSwitcher(
-              duration: const Duration(milliseconds: 520),
+              duration: const Duration(milliseconds: 180),
               switchInCurve: Curves.easeOutCubic,
               switchOutCurve: Curves.easeInCubic,
               transitionBuilder: (child, animation) {
@@ -317,24 +317,50 @@ class _HomeHeaderState extends State<HomeHeader>
               child: _showSearch
                   ? Padding(
                       padding: const EdgeInsets.only(top: 10),
-                      child: SizedBox(
-                        height: 42,
+                      child: Container(
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.06),
+                              blurRadius: 10,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
                         child: TextField(
-                          style:
-                              const TextStyle(color: primaryGreen, fontSize: 14),
+                          cursorColor: primaryGreen,
+                          style: const TextStyle(
+                            color: primaryGreen,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                           decoration: InputDecoration(
                             hintText: 'Mahsulot qidirish...',
                             hintStyle:
-                                TextStyle(color: primaryGreen.withOpacity(0.6)),
+                                TextStyle(color: primaryGreen.withOpacity(0.5)),
                             prefixIcon:
                                 const Icon(Icons.search, color: primaryGreen),
                             filled: true,
-                            fillColor: const Color(0xFFF2F4F3),
+                            fillColor: Colors.white,
                             contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 12),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide.none,
+                                const EdgeInsets.symmetric(horizontal: 14),
+                            isDense: true,
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(
+                                color: primaryGreen.withOpacity(0.12),
+                                width: 1,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(
+                                color: primaryGreen,
+                                width: 1.2,
+                              ),
                             ),
                           ),
                         ),

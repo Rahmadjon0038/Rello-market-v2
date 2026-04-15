@@ -11,7 +11,8 @@ class CartScreen extends StatefulWidget {
   State<CartScreen> createState() => _CartScreenState();
 }
 
-class _CartScreenState extends State<CartScreen> {
+class _CartScreenState extends State<CartScreen>
+    with SingleTickerProviderStateMixin {
   final List<_CartItem> _items = [
     _CartItem(
       id: 1,
@@ -35,6 +36,70 @@ class _CartScreenState extends State<CartScreen> {
   int _selectedReceiver = -1;
   String _deliveryPlace = 'Manzil tanlanmagan';
   LatLng? _deliveryPoint;
+
+  AnimationController _createBottomSheetController() {
+    return AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+      reverseDuration: const Duration(milliseconds: 150),
+    );
+  }
+
+  Future<T?> _showFastBottomSheet<T>({
+    required WidgetBuilder builder,
+    bool isScrollControlled = false,
+    bool showDragHandle = true,
+    bool isDismissible = true,
+    bool enableDrag = true,
+    bool useRootNavigator = false,
+    Color? backgroundColor,
+    ShapeBorder? shape,
+  }) {
+    final controller = _createBottomSheetController();
+    final future = showModalBottomSheet<T>(
+      context: context,
+      isScrollControlled: isScrollControlled,
+      showDragHandle: showDragHandle,
+      isDismissible: isDismissible,
+      enableDrag: enableDrag,
+      useRootNavigator: useRootNavigator,
+      backgroundColor: backgroundColor,
+      shape: shape,
+      transitionAnimationController: controller,
+      builder: builder,
+    );
+    return future.whenComplete(controller.dispose);
+  }
+
+  Future<T?> _showFastDialog<T>({
+    required WidgetBuilder builder,
+    bool barrierDismissible = true,
+  }) {
+    return showGeneralDialog<T>(
+      context: context,
+      barrierDismissible: barrierDismissible,
+      barrierLabel:
+          MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 150),
+      pageBuilder: (ctx, _, __) {
+        return SafeArea(
+          child: Builder(builder: builder),
+        );
+      },
+      transitionBuilder: (ctx, anim, __, child) {
+        final curved =
+            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.98, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
   
   void _removeReceiver(int index) {
     setState(() {
@@ -101,8 +166,7 @@ class _CartScreenState extends State<CartScreen> {
     final firstCtrl = TextEditingController();
     final lastCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
-    showModalBottomSheet(
-      context: context,
+    _showFastBottomSheet(
       isScrollControlled: true,
       showDragHandle: true,
       backgroundColor: Colors.white,
@@ -199,8 +263,10 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   void _openDeliveryModal() {
-    showModalBottomSheet(
-      context: context,
+    _showFastBottomSheet(
+      isDismissible: true,
+      enableDrag: true,
+      useRootNavigator: true,
       showDragHandle: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
@@ -214,19 +280,32 @@ class _CartScreenState extends State<CartScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Yetkazib berish joyi',
-                  style: TextStyle(
-                    color: Color(0xFF0F2F2B),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Yetkazib berish joyi',
+                        style: TextStyle(
+                          color: Color(0xFF0F2F2B),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () =>
+                          Navigator.of(ctx, rootNavigator: true).pop(),
+                      icon: const Icon(Icons.close, size: 20),
+                      color: const Color(0xFF0F2F2B),
+                      splashRadius: 20,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 _PayOption(
                   title: 'Xarita orqali tanlash',
                   onTap: () {
-                    Navigator.pop(ctx);
+                    Navigator.of(ctx, rootNavigator: true).pop();
                     _openMapPicker();
                   },
                 ),
@@ -234,7 +313,7 @@ class _CartScreenState extends State<CartScreen> {
                 _PayOption(
                   title: 'Hozirgi joyim (GPS)',
                   onTap: () {
-                    Navigator.pop(ctx);
+                    Navigator.of(ctx, rootNavigator: true).pop();
                     _useCurrentLocation();
                   },
                 ),
@@ -242,7 +321,7 @@ class _CartScreenState extends State<CartScreen> {
                 _PayOption(
                   title: "Manzilni qo'lda yozish",
                   onTap: () {
-                    Navigator.pop(ctx);
+                    Navigator.of(ctx, rootNavigator: true).pop();
                     _openManualAddress();
                   },
                 ),
@@ -352,8 +431,7 @@ class _CartScreenState extends State<CartScreen> {
     final cityCtrl = TextEditingController();
     final streetCtrl = TextEditingController();
     final homeCtrl = TextEditingController();
-    showModalBottomSheet(
-      context: context,
+    _showFastBottomSheet(
       isScrollControlled: true,
       showDragHandle: true,
       backgroundColor: Colors.white,
@@ -452,8 +530,7 @@ class _CartScreenState extends State<CartScreen> {
     required String message,
     required Future<bool> Function() openSettings,
   }) {
-    showDialog(
-      context: context,
+    _showFastDialog(
       builder: (ctx) {
         return AlertDialog(
           title: Text(title),
@@ -477,8 +554,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   void _openPaySummary() {
-    showModalBottomSheet(
-      context: context,
+    _showFastBottomSheet(
       showDragHandle: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
@@ -537,8 +613,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   void _showOrderSuccess() {
-    showDialog(
-      context: context,
+    _showFastDialog(
       barrierDismissible: false,
       builder: (ctx) {
         return Dialog(
