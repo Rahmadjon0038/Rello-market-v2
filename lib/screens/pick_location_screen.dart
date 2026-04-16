@@ -215,7 +215,7 @@ class _PickLocationScreenState extends State<PickLocationScreen>
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Manzilni tanlang'),

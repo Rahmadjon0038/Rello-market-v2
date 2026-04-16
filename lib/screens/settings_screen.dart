@@ -15,7 +15,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -80,7 +80,7 @@ class _SectionTitle extends StatelessWidget {
       child: Text(
         title,
         style: const TextStyle(
-          color: Color(0xFF0F2F2B),
+          color: Color(0xFF1F5A50),
           fontSize: 13,
           fontWeight: FontWeight.w700,
         ),
@@ -102,7 +102,7 @@ class _SwitchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       margin: const EdgeInsets.only(bottom: 8),
@@ -142,7 +142,7 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(

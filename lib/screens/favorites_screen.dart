@@ -53,17 +53,17 @@ class FavoritesScreen extends StatelessWidget {
                 offset: const Offset(0, 10),
               ),
             ],
-            border: Border.all(color: const Color(0xFF0F2F2B).withOpacity(0.18)),
+            border: Border.all(color: const Color(0xFF1F5A50).withOpacity(0.18)),
           ),
           child: Column(
             children: [
               const Icon(Icons.favorite_border,
-                  size: 52, color: Color(0xFF0F2F2B)),
+                  size: 52, color: Color(0xFF1F5A50)),
               const SizedBox(height: 12),
               const Text(
                 'Sevimlilar bo‘sh',
                 style: TextStyle(
-                  color: Color(0xFF0F2F2B),
+                  color: Color(0xFF1F5A50),
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                 ),
@@ -83,7 +83,7 @@ class FavoritesScreen extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: onGoHome,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0F2F2B),
+                    backgroundColor: const Color(0xFF1F5A50),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -146,7 +146,7 @@ class _FavProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
     const softGray = Color(0xFFF6F7F8);
 
     return Container(

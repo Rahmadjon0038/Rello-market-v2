@@ -67,18 +67,17 @@ class _CartScreenState extends State<CartScreen> {
     return showGeneralDialog<T>(
       context: context,
       barrierDismissible: barrierDismissible,
-      barrierLabel:
-          MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       barrierColor: Colors.black54,
       transitionDuration: const Duration(milliseconds: 150),
       pageBuilder: (ctx, _, __) {
-        return SafeArea(
-          child: Builder(builder: builder),
-        );
+        return SafeArea(child: Builder(builder: builder));
       },
       transitionBuilder: (ctx, anim, __, child) {
-        final curved =
-            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        final curved = CurvedAnimation(
+          parent: anim,
+          curve: Curves.easeOutCubic,
+        );
         return FadeTransition(
           opacity: curved,
           child: ScaleTransition(
@@ -89,7 +88,7 @@ class _CartScreenState extends State<CartScreen> {
       },
     );
   }
-  
+
   void _removeReceiver(int index) {
     setState(() {
       if (index < 0 || index >= _receivers.length) return;
@@ -150,13 +149,40 @@ class _CartScreenState extends State<CartScreen> {
     setState(() {
       final idx = _items.indexWhere((e) => e.id == id);
       if (idx == -1) return;
-      _items[idx] =
-          _items[idx].copyWith(selected: !_items[idx].selected);
+      _items[idx] = _items[idx].copyWith(selected: !_items[idx].selected);
     });
   }
 
   void _selectPay(String method) {
     setState(() => _payMethod = method);
+  }
+
+  InputDecoration _modalInputDecoration(String label) {
+    const primaryGreen = Color(0xFF1F5A50);
+    const mutedText = Color(0xFF8A9A97);
+
+    OutlineInputBorder border(Color color, {double width = 1}) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
+
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: mutedText),
+      floatingLabelStyle: const TextStyle(
+        color: primaryGreen,
+        fontWeight: FontWeight.w700,
+      ),
+      filled: true,
+      fillColor: const Color(0xFFF6F7F8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: border(primaryGreen.withValues(alpha: 0.12)),
+      focusedBorder: border(primaryGreen, width: 1.4),
+      errorBorder: border(Colors.redAccent.withValues(alpha: 0.7)),
+      focusedErrorBorder: border(Colors.redAccent, width: 1.4),
+    );
   }
 
   void _openReceiverModal() {
@@ -186,7 +212,7 @@ class _CartScreenState extends State<CartScreen> {
                 const Text(
                   'Yangi buyurtma oluvchi',
                   style: TextStyle(
-                    color: Color(0xFF0F2F2B),
+                    color: Color(0xFF1F5A50),
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                   ),
@@ -194,27 +220,21 @@ class _CartScreenState extends State<CartScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: firstCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Ism',
-                    border: OutlineInputBorder(),
-                  ),
+                  cursorColor: const Color(0xFF1F5A50),
+                  decoration: _modalInputDecoration('Ism'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: lastCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Familiya',
-                    border: OutlineInputBorder(),
-                  ),
+                  cursorColor: const Color(0xFF1F5A50),
+                  decoration: _modalInputDecoration('Familiya'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: phoneCtrl,
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Telefon raqami',
-                    border: OutlineInputBorder(),
-                  ),
+                  cursorColor: const Color(0xFF1F5A50),
+                  decoration: _modalInputDecoration('Telefon raqami'),
                 ),
                 const SizedBox(height: 12),
                 SizedBox(
@@ -222,7 +242,7 @@ class _CartScreenState extends State<CartScreen> {
                   height: 44,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F2F2B),
+                      backgroundColor: const Color(0xFF1F5A50),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -235,19 +255,23 @@ class _CartScreenState extends State<CartScreen> {
                         return;
                       }
                       setState(() {
-                        _receivers.add(_Receiver(
-                          firstName: firstCtrl.text.trim(),
-                          lastName: lastCtrl.text.trim(),
-                          phone: phoneCtrl.text.trim(),
-                        ));
+                        _receivers.add(
+                          _Receiver(
+                            firstName: firstCtrl.text.trim(),
+                            lastName: lastCtrl.text.trim(),
+                            phone: phoneCtrl.text.trim(),
+                          ),
+                        );
                         _selectedReceiver = _receivers.length - 1;
                       });
                       Navigator.pop(ctx);
                     },
                     child: const Text(
                       'Saqlash',
-                      style:
-                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -282,7 +306,7 @@ class _CartScreenState extends State<CartScreen> {
                       child: Text(
                         'Yetkazib berish joyi',
                         style: TextStyle(
-                          color: Color(0xFF0F2F2B),
+                          color: Color(0xFF1F5A50),
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                         ),
@@ -291,7 +315,7 @@ class _CartScreenState extends State<CartScreen> {
                     IconButton(
                       onPressed: () => Navigator.of(ctx).pop(),
                       icon: const Icon(Icons.close, size: 20),
-                      color: const Color(0xFF0F2F2B),
+                      color: const Color(0xFF1F5A50),
                       splashRadius: 20,
                     ),
                   ],
@@ -331,27 +355,27 @@ class _CartScreenState extends State<CartScreen> {
   void _openMapPicker() {
     Navigator.of(context)
         .push<PickResult>(
-      MaterialPageRoute(
-        builder: (_) => PickLocationScreen(initial: _deliveryPoint),
-      ),
-    )
+          MaterialPageRoute(
+            builder: (_) => PickLocationScreen(initial: _deliveryPoint),
+          ),
+        )
         .then((result) {
-      if (result == null) return;
-      setState(() {
-        _deliveryPoint = result.point;
-        _deliveryPlace = result.address.isEmpty
-            ? 'Lat: ${result.point.latitude.toStringAsFixed(5)}, Lng: ${result.point.longitude.toStringAsFixed(5)}'
-            : result.address;
-      });
-    });
+          if (result == null) return;
+          setState(() {
+            _deliveryPoint = result.point;
+            _deliveryPlace = result.address.isEmpty
+                ? 'Lat: ${result.point.latitude.toStringAsFixed(5)}, Lng: ${result.point.longitude.toStringAsFixed(5)}'
+                : result.address;
+          });
+        });
   }
 
   Future<void> _useCurrentLocation() async {
     try {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Joy aniqlanmoqda...')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Joy aniqlanmoqda...')));
       }
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -396,8 +420,10 @@ class _CartScreenState extends State<CartScreen> {
       final point = LatLng(pos.latitude, pos.longitude);
       String address = '';
       try {
-        final placemarks =
-            await placemarkFromCoordinates(point.latitude, point.longitude);
+        final placemarks = await placemarkFromCoordinates(
+          point.latitude,
+          point.longitude,
+        );
         if (placemarks.isNotEmpty) {
           final m = placemarks.first;
           final parts = <String>[
@@ -415,9 +441,9 @@ class _CartScreenState extends State<CartScreen> {
             : address;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Joy tanlandi')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Joy tanlandi')));
       }
     } catch (_) {}
   }
@@ -450,7 +476,7 @@ class _CartScreenState extends State<CartScreen> {
                   child: Text(
                     "Manzilni qo'lda yozish",
                     style: TextStyle(
-                      color: Color(0xFF0F2F2B),
+                      color: Color(0xFF1F5A50),
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                     ),
@@ -459,26 +485,20 @@ class _CartScreenState extends State<CartScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: cityCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Shahar',
-                    border: OutlineInputBorder(),
-                  ),
+                  cursorColor: const Color(0xFF1F5A50),
+                  decoration: _modalInputDecoration('Shahar'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: streetCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Ko‘cha',
-                    border: OutlineInputBorder(),
-                  ),
+                  cursorColor: const Color(0xFF1F5A50),
+                  decoration: _modalInputDecoration('Ko‘cha'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: homeCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Uy / kvartira',
-                    border: OutlineInputBorder(),
-                  ),
+                  cursorColor: const Color(0xFF1F5A50),
+                  decoration: _modalInputDecoration('Uy / kvartira'),
                 ),
                 const SizedBox(height: 12),
                 SizedBox(
@@ -486,7 +506,7 @@ class _CartScreenState extends State<CartScreen> {
                   height: 44,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F2F2B),
+                      backgroundColor: const Color(0xFF1F5A50),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -496,9 +516,11 @@ class _CartScreenState extends State<CartScreen> {
                       final city = cityCtrl.text.trim();
                       final street = streetCtrl.text.trim();
                       final home = homeCtrl.text.trim();
-                      final parts = [city, street, home]
-                          .where((e) => e.isNotEmpty)
-                          .toList();
+                      final parts = [
+                        city,
+                        street,
+                        home,
+                      ].where((e) => e.isNotEmpty).toList();
                       if (parts.isEmpty) return;
                       setState(() {
                         _deliveryPlace = parts.join(', ');
@@ -507,8 +529,10 @@ class _CartScreenState extends State<CartScreen> {
                     },
                     child: const Text(
                       'Saqlash',
-                      style:
-                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -566,7 +590,7 @@ class _CartScreenState extends State<CartScreen> {
                 Text(
                   'To‘lov: $_payMethod',
                   style: const TextStyle(
-                    color: Color(0xFF0F2F2B),
+                    color: Color(0xFF1F5A50),
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                   ),
@@ -583,7 +607,7 @@ class _CartScreenState extends State<CartScreen> {
                   width: double.infinity,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F2F2B),
+                      backgroundColor: const Color(0xFF1F5A50),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -595,7 +619,9 @@ class _CartScreenState extends State<CartScreen> {
                           ? "Buyurtmani tasdiqlash"
                           : "To'lash",
                       style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w700),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -612,21 +638,21 @@ class _CartScreenState extends State<CartScreen> {
       barrierDismissible: false,
       builder: (ctx) {
         return Dialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.check_circle,
-                    color: Colors.green, size: 64),
+                const Icon(Icons.check_circle, color: Colors.green, size: 64),
                 const SizedBox(height: 12),
                 const Text(
                   'Buyurtmangiz qabul qilindi',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Color(0xFF0F2F2B),
+                    color: Color(0xFF1F5A50),
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                   ),
@@ -635,10 +661,7 @@ class _CartScreenState extends State<CartScreen> {
                 const Text(
                   "Buyurtma uchun rahmat. Uni tez orada yetkazib berishadi.",
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Color(0xFF3D4B48),
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Color(0xFF3D4B48), fontSize: 12),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
@@ -646,7 +669,7 @@ class _CartScreenState extends State<CartScreen> {
                   height: 40,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F2F2B),
+                      backgroundColor: const Color(0xFF1F5A50),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -655,8 +678,10 @@ class _CartScreenState extends State<CartScreen> {
                     onPressed: () => Navigator.pop(ctx),
                     child: const Text(
                       'Tushunarli',
-                      style:
-                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -665,16 +690,14 @@ class _CartScreenState extends State<CartScreen> {
                   onPressed: () {
                     Navigator.pop(ctx);
                     Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const OrdersScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const OrdersScreen()),
                     );
                   },
                   child: const Text(
                     "Buyurtmalaringizni Mening buyurtmalarim sahifasida ko'rishingiz mumkin",
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Color(0xFF0F2F2B),
+                      color: Color(0xFF1F5A50),
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       decoration: TextDecoration.underline,
@@ -691,9 +714,10 @@ class _CartScreenState extends State<CartScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
     final currentReceiver = _activeReceiver();
-    final canOrder = _items.any((e) => e.selected) &&
+    final canOrder =
+        _items.any((e) => e.selected) &&
         (currentReceiver?.fullName.trim().isNotEmpty ?? false) &&
         (currentReceiver?.phone.trim().length ?? 0) > 3 &&
         _deliveryPlace != 'Manzil tanlanmagan' &&
@@ -732,8 +756,7 @@ class _CartScreenState extends State<CartScreen> {
           ),
           child: Column(
             children: const [
-              Icon(Icons.shopping_cart_outlined,
-                  size: 52, color: primaryGreen),
+              Icon(Icons.shopping_cart_outlined, size: 52, color: primaryGreen),
               SizedBox(height: 12),
               Text(
                 'Savat bo‘sh',
@@ -747,10 +770,7 @@ class _CartScreenState extends State<CartScreen> {
               Text(
                 'Mahsulot qo‘shing va buyurtma bering.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Color(0xFF8A9A97),
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: Color(0xFF8A9A97), fontSize: 12),
               ),
             ],
           ),
@@ -810,8 +830,10 @@ class _CartScreenState extends State<CartScreen> {
                     icon: const Icon(Icons.person_add, size: 20),
                     label: const Text(
                       'Buyurtmani oluvchi',
-                      style:
-                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -843,7 +865,7 @@ class _CartScreenState extends State<CartScreen> {
                   child: Text(
                     "To'lov shaklini tanlang",
                     style: TextStyle(
-                      color: Color(0xFF0F2F2B),
+                      color: Color(0xFF1F5A50),
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -852,14 +874,22 @@ class _CartScreenState extends State<CartScreen> {
                 const SizedBox(height: 10),
                 _PayOption(
                   title: 'Click',
-                  leading: Image.asset('assets/click.png', width: 40, height: 40),
+                  leading: Image.asset(
+                    'assets/click.png',
+                    width: 40,
+                    height: 40,
+                  ),
                   selected: _payMethod == 'Click',
                   onTap: () => _selectPay('Click'),
                 ),
                 const SizedBox(height: 8),
                 _PayOption(
                   title: 'Payme',
-                  leading: Image.asset('assets/payme.png', width: 40, height: 40),
+                  leading: Image.asset(
+                    'assets/payme.png',
+                    width: 40,
+                    height: 40,
+                  ),
                   selected: _payMethod == 'Payme',
                   onTap: () => _selectPay('Payme'),
                 ),
@@ -902,8 +932,10 @@ class _CartScreenState extends State<CartScreen> {
                     },
                     child: const Text(
                       'Buyurtma berish',
-                      style:
-                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -974,7 +1006,7 @@ class _CartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
     const softGray = Color(0xFFF6F7F8);
 
     return Container(
@@ -1111,7 +1143,7 @@ class _QtyButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
     const softGray = Color(0xFFF6F7F8);
 
     return Container(
@@ -1135,15 +1167,11 @@ class _RowItem extends StatelessWidget {
   final String value;
   final bool bold;
 
-  const _RowItem({
-    required this.label,
-    required this.value,
-    this.bold = false,
-  });
+  const _RowItem({required this.label, required this.value, this.bold = false});
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -1189,34 +1217,32 @@ class _PayOption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          color: selected
-              ? const Color(0xFFE6F4EF)
-              : const Color(0xFFF6F7F8),
+          color: selected ? const Color(0xFFE6F4EF) : const Color(0xFFF6F7F8),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: selected
-                ? const Color(0xFF0F2F2B)
-                : const Color(0xFF0F2F2B).withOpacity(0.1),
+                ? const Color(0xFF1F5A50)
+                : const Color(0xFF1F5A50).withOpacity(0.1),
           ),
         ),
         child: Row(
           children: [
-            if (leading != null) ...[
-              leading!,
-              const SizedBox(width: 10),
-            ],
+            if (leading != null) ...[leading!, const SizedBox(width: 10)],
             Text(
               title,
               style: const TextStyle(
-                color: Color(0xFF0F2F2B),
+                color: Color(0xFF1F5A50),
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
             ),
             const Spacer(),
             if (selected)
-              const Icon(Icons.check_circle,
-                  color: Color(0xFF0F2F2B), size: 18),
+              const Icon(
+                Icons.check_circle,
+                color: Color(0xFF1F5A50),
+                size: 18,
+              ),
           ],
         ),
       ),
@@ -1249,7 +1275,7 @@ class _SectionCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFFF6F7F8),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFF0F2F2B).withOpacity(0.1)),
+          border: Border.all(color: const Color(0xFF1F5A50).withOpacity(0.1)),
         ),
         child: Row(
           children: [
@@ -1260,7 +1286,7 @@ class _SectionCard extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      color: Color(0xFF0F2F2B),
+                      color: Color(0xFF1F5A50),
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1269,7 +1295,7 @@ class _SectionCard extends StatelessWidget {
                   Text(
                     value,
                     style: const TextStyle(
-                      color: Color(0xFF0F2F2B),
+                      color: Color(0xFF1F5A50),
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
@@ -1282,7 +1308,7 @@ class _SectionCard extends StatelessWidget {
             if (trailing != null)
               trailing!
             else if (showChevron)
-              const Icon(Icons.chevron_right, color: Color(0xFF0F2F2B)),
+              const Icon(Icons.chevron_right, color: Color(0xFF1F5A50)),
           ],
         ),
       ),
@@ -1316,11 +1342,7 @@ class _ImagePreview extends StatelessWidget {
       body: SafeArea(
         child: Stack(
           children: [
-            Center(
-              child: InteractiveViewer(
-                child: Image.asset(imagePath),
-              ),
-            ),
+            Center(child: InteractiveViewer(child: Image.asset(imagePath))),
             Positioned(
               top: 12,
               right: 12,

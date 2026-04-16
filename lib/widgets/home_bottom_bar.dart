@@ -12,7 +12,6 @@ class HomeBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
     const accent = Color(0xFF3A6B5B);
     const bg = Colors.white;
 
@@ -21,18 +20,18 @@ class HomeBottomBar extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(22),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.12),
+                color: Colors.black.withValues(alpha: 0.12),
                 blurRadius: 18,
                 offset: const Offset(0, 8),
               ),
             ],
-            border: Border.all(color: Colors.black.withOpacity(0.10)),
+            border: Border.all(color: Colors.black.withValues(alpha: 0.10)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -42,26 +41,23 @@ class HomeBottomBar extends StatelessWidget {
                 label: 'Bosh sahifa',
                 color: accent,
                 active: currentIndex == 0,
-              onTap: () => onTap(0),
-            ),
-            _BarItem(
-              icon: Icons.favorite_rounded,
-              label: 'Sevimlilar',
-              color: accent,
-              active: currentIndex == 1,
-              onTap: () => onTap(1),
-            ),
-            _CartItem(
-              active: currentIndex == 2,
-              onTap: () => onTap(2),
-            ),
-            _BarItem(
-              icon: Icons.person_rounded,
-              label: 'Profil',
-              color: accent,
-              active: currentIndex == 3,
-              onTap: () => onTap(3),
-            ),
+                onTap: () => onTap(0),
+              ),
+              _BarItem(
+                icon: Icons.favorite_rounded,
+                label: 'Sevimlilar',
+                color: accent,
+                active: currentIndex == 1,
+                onTap: () => onTap(1),
+              ),
+              _CartItem(active: currentIndex == 2, onTap: () => onTap(2)),
+              _BarItem(
+                icon: Icons.person_rounded,
+                label: 'Profil',
+                color: accent,
+                active: currentIndex == 3,
+                onTap: () => onTap(3),
+              ),
               _BarItem(
                 icon: Icons.settings_rounded,
                 label: 'Sozlamalar',
@@ -94,35 +90,35 @@ class _BarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              ),
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        label: label,
+        button: true,
+        selected: active,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: SizedBox(
+            width: 48,
+            height: 46,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: color, size: 24),
+                const SizedBox(height: 5),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: active ? 20 : 4,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: active ? color : Colors.transparent,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 3),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: active ? 22 : 0,
-              height: 3,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -137,63 +133,66 @@ class _CartItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
     const accent = Color(0xFF3A6B5B);
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
+    return Tooltip(
+      message: 'Savat',
+      child: Semantics(
+        label: 'Savat',
+        button: true,
+        selected: active,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: SizedBox(
+            width: 48,
+            height: 46,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.shopping_cart_rounded, color: accent, size: 22),
-                Positioned(
-                  right: -6,
-                  top: -6,
-                  child: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(
+                      Icons.shopping_cart_rounded,
+                      color: accent,
+                      size: 24,
                     ),
-                    alignment: Alignment.center,
-                    child: const Text(
-                      '1',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
+                    Positioned(
+                      right: -7,
+                      top: -7,
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: const Text(
+                          '1',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: active ? 20 : 4,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: active ? accent : Colors.transparent,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Savat',
-              style: TextStyle(
-                color: accent,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 3),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: active ? 22 : 0,
-              height: 3,
-              decoration: BoxDecoration(
-                color: accent,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -5,7 +5,7 @@ class OrdersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
     const orders = [
       _Order(
         id: 'ORD-1023',
@@ -233,6 +233,6 @@ Color _statusColor(String status) {
     case 'Yakunlandi':
       return const Color(0xFF2DB783);
     default:
-      return const Color(0xFF0F2F2B);
+      return const Color(0xFF1F5A50);
   }
 }

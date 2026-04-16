@@ -143,7 +143,7 @@ class _HomeHeaderState extends State<HomeHeader>
   }
 
   void _openLanguageSheet() {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
     _sheetController ??= AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 160),
@@ -211,7 +211,7 @@ class _HomeHeaderState extends State<HomeHeader>
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
     const lightGreen = Color(0xFFE6F4EF);
 
     return Padding(
@@ -523,7 +523,7 @@ class _LangFlag extends StatelessWidget {
             child: const Text(
               'UZ',
               style: TextStyle(
-                color: Color(0xFF0F2F2B),
+                color: Color(0xFF1F5A50),
                 fontSize: 8,
                 fontWeight: FontWeight.w700,
               ),
@@ -548,7 +548,7 @@ class _HeaderIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: onTap,
@@ -599,7 +599,7 @@ class _LangOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
     const lightGreen = Color(0xFFE6F4EF);
 
     return InkWell(
@@ -775,7 +775,7 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -783,11 +783,11 @@ class _CategoryChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF0F2F2B) : Colors.white,
+          color: selected ? const Color(0xFF1F5A50) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: selected
-                ? const Color(0xFF0F2F2B)
+                ? const Color(0xFF1F5A50)
                 : primaryGreen.withOpacity(0.15),
             width: 1,
           ),
@@ -804,7 +804,7 @@ class _CategoryChip extends StatelessWidget {
             Text(
               item.name,
               style: TextStyle(
-                color: selected ? Colors.white : const Color(0xFF0F2F2B),
+                color: selected ? Colors.white : const Color(0xFF1F5A50),
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),
@@ -849,7 +849,7 @@ class _ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF0F2F2B);
+    const primaryGreen = Color(0xFF1F5A50);
     const softGray = Color(0xFFF6F7F8);
 
     return Container(
