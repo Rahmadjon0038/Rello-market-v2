@@ -41,25 +41,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _ActionTile(title: 'Yordam', value: 'FAQ'),
           const SizedBox(height: 8),
           _ActionTile(title: 'Versiya', value: '1.0.0'),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 44,
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () {},
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-                side: BorderSide(color: Colors.red.withOpacity(0.5)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                'Chiqish',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
           const SizedBox(height: 16),
         ],
       ),
@@ -123,11 +104,7 @@ class _SwitchTile extends StatelessWidget {
               ),
             ),
           ),
-          Switch(
-            value: value,
-            activeColor: primaryGreen,
-            onChanged: onChanged,
-          ),
+          Switch(value: value, activeColor: primaryGreen, onChanged: onChanged),
         ],
       ),
     );
@@ -164,10 +141,7 @@ class _ActionTile extends StatelessWidget {
           ),
           Text(
             value,
-            style: const TextStyle(
-              color: Color(0xFF8A9A97),
-              fontSize: 12,
-            ),
+            style: const TextStyle(color: Color(0xFF8A9A97), fontSize: 12),
           ),
           const SizedBox(width: 6),
           const Icon(Icons.chevron_right, color: primaryGreen, size: 18),

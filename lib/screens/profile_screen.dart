@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:hello_flutter_app/screens/auth_screen.dart';
 import 'package:hello_flutter_app/screens/open_store_screen.dart';
 import 'package:hello_flutter_app/screens/orders_screen.dart';
+import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:image_picker/image_picker.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final VoidCallback? onAuthCancelled;
+
+  const ProfileScreen({super.key, this.onAuthCancelled});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -16,11 +19,27 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoggedIn = false;
   bool _authRouteOpen = false;
-  bool _authDismissed = false;
   String _name = '';
   String _phone = '';
   File? _avatarFile;
   final ImagePicker _picker = ImagePicker();
+  final AuthApiService _authApi = AuthApiService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedSession();
+  }
+
+  Future<void> _loadSavedSession() async {
+    final session = await _authApi.loadSavedSession();
+    if (!mounted || session == null) return;
+    setState(() {
+      _isLoggedIn = true;
+      _name = session.name;
+      _phone = session.phone;
+    });
+  }
 
   Future<T?> _showFastBottomSheet<T>({
     required WidgetBuilder builder,
@@ -81,11 +100,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _logout() {
+  Future<void> _logout() async {
+    await _authApi.clearSession();
+    if (!mounted) return;
     setState(() {
       _isLoggedIn = false;
       _avatarFile = null;
-      _authDismissed = false;
     });
   }
 
@@ -98,14 +118,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) return;
     _authRouteOpen = false;
     if (result == null) {
-      setState(() => _authDismissed = true);
+      widget.onAuthCancelled?.call();
       return;
     }
     setState(() {
       _isLoggedIn = true;
-      _authDismissed = false;
       _name = result.name;
       _phone = result.phone;
+    });
+    _showLoginSuccessNotification();
+  }
+
+  void _showLoginSuccessNotification() {
+    final overlay = Overlay.of(context);
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) => _TopAuthNotification(
+        message: 'Tizimga kirish muvaffaqiyatli',
+        onClose: () {
+          if (entry.mounted) entry.remove();
+        },
+      ),
+    );
+
+    overlay.insert(entry);
+    Future<void>.delayed(const Duration(milliseconds: 2600), () {
+      if (entry.mounted) entry.remove();
     });
   }
 
@@ -228,62 +266,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildSignedOutFallback() {
-    const primaryGreen = Color(0xFF1F5A50);
-    const mutedText = Color(0xFF8A9A97);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _openAuthPage();
+    });
 
-    if (!_authDismissed) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _openAuthPage();
-      });
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          const Icon(Icons.lock_person_rounded, color: primaryGreen, size: 54),
-          const SizedBox(height: 12),
-          const Text(
-            'Profilga kirish kerak',
-            style: TextStyle(
-              color: primaryGreen,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Profil ma’lumotlarini ko‘rish uchun tizimga kiring.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: mutedText, fontSize: 13, height: 1.35),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton(
-              onPressed: () {
-                setState(() => _authDismissed = false);
-                _openAuthPage();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryGreen,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                'Tizimga kirish',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
   @override
@@ -405,6 +392,96 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 16),
         ],
+      ),
+    );
+  }
+}
+
+class _TopAuthNotification extends StatelessWidget {
+  final String message;
+  final VoidCallback onClose;
+
+  const _TopAuthNotification({required this.message, required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+
+    return Positioned(
+      top: MediaQuery.paddingOf(context).top + 12,
+      left: 16,
+      right: 16,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        builder: (context, value, child) {
+          return Opacity(
+            opacity: value,
+            child: Transform.translate(
+              offset: Offset(0, -24 * (1 - value)),
+              child: child,
+            ),
+          );
+        },
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: primaryGreen,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: primaryGreen.withValues(alpha: 0.24),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.16),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    color: Colors.white,
+                    size: 19,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close_rounded),
+                  color: Colors.white,
+                  iconSize: 18,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 28,
+                    height: 28,
+                  ),
+                  splashRadius: 18,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

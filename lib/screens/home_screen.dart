@@ -15,16 +15,31 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  int _lastNonProfileIndex = 0;
+
+  void _setTab(int index) {
+    setState(() {
+      if (index != 3) _lastNonProfileIndex = index;
+      _currentIndex = index;
+    });
+  }
+
+  void _returnFromCancelledAuth() {
+    if (!mounted) return;
+    setState(() => _currentIndex = _lastNonProfileIndex);
+  }
 
   @override
   Widget build(BuildContext context) {
     final pages = [
       const SizedBox.shrink(),
-      FavoritesScreen(onGoHome: () {
-        setState(() => _currentIndex = 0);
-      }),
+      FavoritesScreen(
+        onGoHome: () {
+          _setTab(0);
+        },
+      ),
       const CartScreen(),
-      const ProfileScreen(),
+      ProfileScreen(onAuthCancelled: _returnFromCancelledAuth),
       const SettingsScreen(),
     ];
 
@@ -32,7 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: Colors.white,
       bottomNavigationBar: HomeBottomBar(
         currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
+        onTap: _setTab,
       ),
       body: SafeArea(
         child: ListView(

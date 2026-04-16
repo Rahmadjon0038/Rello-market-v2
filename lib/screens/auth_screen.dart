@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:hello_flutter_app/services/auth_api_service.dart';
 
 class AuthResult {
   final String name;
@@ -16,16 +19,24 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen>
     with SingleTickerProviderStateMixin {
-  static const _mockSmsCode = '1234';
-
+  final AuthApiService _authApi = AuthApiService();
   late final TabController _tabController;
   final TextEditingController _loginPhoneCtrl = TextEditingController();
-  final TextEditingController _loginCodeCtrl = TextEditingController();
+  final TextEditingController _loginPasswordCtrl = TextEditingController();
   final TextEditingController _registerFirstCtrl = TextEditingController();
   final TextEditingController _registerLastCtrl = TextEditingController();
   final TextEditingController _registerPhoneCtrl = TextEditingController();
   final TextEditingController _registerCodeCtrl = TextEditingController();
+  final TextEditingController _registerPasswordCtrl = TextEditingController();
+  Timer? _registerSmsTimer;
   int _registerStep = 0;
+  int _registerSmsSecondsLeft = 0;
+  bool _isSubmitting = false;
+  String? _loginMessage;
+  String? _loginError;
+  String? _registerMessage;
+  String? _registerError;
+  String? _registrationToken;
 
   @override
   void initState() {
@@ -38,86 +49,290 @@ class _AuthScreenState extends State<AuthScreen>
 
   @override
   void dispose() {
+    _registerSmsTimer?.cancel();
     _tabController.dispose();
     _loginPhoneCtrl.dispose();
-    _loginCodeCtrl.dispose();
+    _loginPasswordCtrl.dispose();
     _registerFirstCtrl.dispose();
     _registerLastCtrl.dispose();
     _registerPhoneCtrl.dispose();
     _registerCodeCtrl.dispose();
+    _registerPasswordCtrl.dispose();
     super.dispose();
-  }
-
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   InputDecoration _inputDecoration(String label) {
     const primaryGreen = Color(0xFF1F5A50);
-    const mutedText = Color(0xFF8A9A97);
 
     OutlineInputBorder border(Color color, {double width = 1}) {
       return OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(18),
         borderSide: BorderSide(color: color, width: width),
       );
     }
 
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: mutedText),
+      labelStyle: const TextStyle(
+        color: Color(0xFF1E2E2A),
+        fontSize: 15,
+        fontWeight: FontWeight.w500,
+      ),
       floatingLabelStyle: const TextStyle(
         color: primaryGreen,
+        fontSize: 13,
         fontWeight: FontWeight.w700,
       ),
       filled: true,
-      fillColor: const Color(0xFFF6F7F8),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      enabledBorder: border(primaryGreen.withValues(alpha: 0.12)),
-      focusedBorder: border(primaryGreen, width: 1.4),
+      fillColor: Colors.transparent,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      enabledBorder: border(primaryGreen.withValues(alpha: 0.22), width: 1.2),
+      focusedBorder: border(primaryGreen, width: 1.5),
       errorBorder: border(Colors.redAccent.withValues(alpha: 0.7)),
       focusedErrorBorder: border(Colors.redAccent, width: 1.4),
     );
   }
 
-  void _login() {
+  String _codeMessage(CodeResponse response) {
+    final codeText = response.smsCode == null
+        ? ''
+        : ' Kod: ${response.smsCode}';
+    final expiresText = response.expiresInSeconds == null
+        ? ''
+        : ' ${response.expiresInSeconds} sekund amal qiladi.';
+    return '${response.message}.$codeText$expiresText';
+  }
+
+  void _setLoginMessage({String? message, String? error}) {
+    setState(() {
+      _loginMessage = message;
+      _loginError = error;
+    });
+  }
+
+  void _setRegisterMessage({String? message, String? error}) {
+    setState(() {
+      _registerMessage = message;
+      _registerError = error;
+    });
+  }
+
+  void _startRegisterSmsTimer(int seconds) {
+    _registerSmsTimer?.cancel();
+    setState(() => _registerSmsSecondsLeft = seconds);
+    if (seconds <= 0) return;
+
+    _registerSmsTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      if (_registerSmsSecondsLeft <= 1) {
+        timer.cancel();
+        setState(() => _registerSmsSecondsLeft = 0);
+        return;
+      }
+
+      setState(() => _registerSmsSecondsLeft -= 1);
+    });
+  }
+
+  AuthResult _resultFromSession(AuthSession session) {
+    return AuthResult(name: session.name, phone: session.phone);
+  }
+
+  Future<void> _login() async {
+    if (_isSubmitting) return;
     final phone = _loginPhoneCtrl.text.trim();
-    final code = _loginCodeCtrl.text.trim();
-    if (phone.isEmpty || code.isEmpty) {
-      _showMessage("Telefon raqam va SMS kodni kiriting");
+    final password = _loginPasswordCtrl.text.trim();
+    if (phone.isEmpty || password.isEmpty) {
+      _setLoginMessage(error: 'Telefon raqam va parolni kiriting');
       return;
     }
-    if (code != _mockSmsCode) {
-      _showMessage("Parol xato");
+    if (password.length < 6) {
+      _setLoginMessage(
+        error: "Parol kamida 6 ta belgidan iborat bo'lishi kerak",
+      );
       return;
     }
-    _showMessage("Tizimga kirildi");
-    Navigator.of(context).pop(AuthResult(name: 'Mock User', phone: phone));
+
+    setState(() {
+      _isSubmitting = true;
+      _loginError = null;
+      _loginMessage = null;
+    });
+
+    try {
+      final session = await _authApi.login(phone: phone, password: password);
+      if (!mounted) return;
+      Navigator.of(context).pop(_resultFromSession(session));
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      _setLoginMessage(error: error.message);
+    } on Object {
+      if (!mounted) return;
+      _setLoginMessage(error: 'Server bilan bog‘lanib bo‘lmadi');
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
-  void _goRegisterCodeStep() {
-    if (_registerFirstCtrl.text.trim().isEmpty ||
-        _registerLastCtrl.text.trim().isEmpty ||
-        _registerPhoneCtrl.text.trim().isEmpty) {
-      _showMessage("Barcha ma'lumotlarni kiriting");
+  Future<void> _goRegisterCodeStep() async {
+    if (_isSubmitting) return;
+    final phone = _registerPhoneCtrl.text.trim();
+    if (phone.isEmpty) {
+      _setRegisterMessage(error: 'Telefon raqamni kiriting');
       return;
     }
-    setState(() => _registerStep = 1);
+
+    setState(() {
+      _isSubmitting = true;
+      _registerError = null;
+      _registerMessage = null;
+    });
+
+    try {
+      final response = await _authApi.requestRegisterCode(phone: phone);
+      if (!mounted) return;
+      setState(() {
+        _registerStep = 1;
+        _registerMessage = _codeMessage(response);
+        _registrationToken = null;
+      });
+      _startRegisterSmsTimer(response.expiresInSeconds ?? 60);
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      _setRegisterMessage(error: error.message);
+    } on Object {
+      if (!mounted) return;
+      _setRegisterMessage(error: 'Server bilan bog‘lanib bo‘lmadi');
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
-  void _completeRegister() {
-    if (_registerCodeCtrl.text.trim() != _mockSmsCode) {
-      _showMessage("Parol xato");
+  Future<void> _resendRegisterCode() async {
+    if (_isSubmitting || _registerSmsSecondsLeft > 0) return;
+    final phone = _registerPhoneCtrl.text.trim();
+    if (phone.isEmpty) {
+      _setRegisterMessage(error: 'Telefon raqamni kiriting');
       return;
     }
-    final name =
-        '${_registerFirstCtrl.text.trim()} ${_registerLastCtrl.text.trim()}';
-    _showMessage("Profil yaratildi va tizimga kirildi");
-    Navigator.of(
-      context,
-    ).pop(AuthResult(name: name, phone: _registerPhoneCtrl.text.trim()));
+
+    setState(() {
+      _isSubmitting = true;
+      _registerError = null;
+      _registerMessage = null;
+    });
+
+    try {
+      final response = await _authApi.requestRegisterCode(phone: phone);
+      if (!mounted) return;
+      setState(() {
+        _registerMessage = _codeMessage(response);
+        _registrationToken = null;
+      });
+      _startRegisterSmsTimer(response.expiresInSeconds ?? 60);
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      _setRegisterMessage(error: error.message);
+    } on Object {
+      if (!mounted) return;
+      _setRegisterMessage(error: 'Server bilan bog‘lanib bo‘lmadi');
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _verifyRegisterCodeStep() async {
+    if (_isSubmitting) return;
+    final phone = _registerPhoneCtrl.text.trim();
+    final code = _registerCodeCtrl.text.trim();
+    if (code.isEmpty) {
+      _setRegisterMessage(error: 'SMS kodni kiriting');
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _registerError = null;
+      _registerMessage = null;
+    });
+
+    try {
+      final response = await _authApi.verifyRegisterCode(
+        phone: phone,
+        code: code,
+      );
+      if (!mounted) return;
+      _registerSmsTimer?.cancel();
+      setState(() {
+        _registerStep = 2;
+        _registerSmsSecondsLeft = 0;
+        _registrationToken = response.registrationToken;
+        _registerMessage = response.expiresInSeconds == null
+            ? response.message
+            : '${response.message}. Profilni ${response.expiresInSeconds} sekund ichida yakunlang.';
+      });
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      _setRegisterMessage(error: error.message);
+    } on Object {
+      if (!mounted) return;
+      _setRegisterMessage(error: 'Server bilan bog‘lanib bo‘lmadi');
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _completeRegister() async {
+    if (_isSubmitting) return;
+    final firstName = _registerFirstCtrl.text.trim();
+    final lastName = _registerLastCtrl.text.trim();
+    final phone = _registerPhoneCtrl.text.trim();
+    final password = _registerPasswordCtrl.text.trim();
+    final registrationToken = _registrationToken;
+    if (firstName.isEmpty || lastName.isEmpty || password.isEmpty) {
+      _setRegisterMessage(error: 'Ism, familiya va parolni kiriting');
+      return;
+    }
+    if (registrationToken == null || registrationToken.isEmpty) {
+      _setRegisterMessage(error: 'Avval SMS kodni tasdiqlang');
+      setState(() => _registerStep = 1);
+      return;
+    }
+    if (password.length < 6) {
+      _setRegisterMessage(
+        error: "Parol kamida 6 ta belgidan iborat bo'lishi kerak",
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _registerError = null;
+    });
+
+    try {
+      final session = await _authApi.completeRegister(
+        firstName: firstName,
+        lastName: lastName,
+        phone: phone,
+        registrationToken: registrationToken,
+        password: password,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(_resultFromSession(session));
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      _setRegisterMessage(error: error.message);
+    } on Object {
+      if (!mounted) return;
+      _setRegisterMessage(error: 'Server bilan bog‘lanib bo‘lmadi');
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   void _handlePrimaryAction() {
@@ -131,25 +346,49 @@ class _AuthScreenState extends State<AuthScreen>
       return;
     }
 
+    if (_registerStep == 1) {
+      _verifyRegisterCodeStep();
+      return;
+    }
+
     _completeRegister();
   }
 
   String get _primaryButtonText {
+    if (_isSubmitting) return 'Kuting...';
     if (_tabController.index == 0) return 'Tizimga kirish';
     if (_registerStep == 0) return 'Davom etish';
-    return 'Profil yaratish';
+    if (_registerStep == 1) return 'Tasdiqlash';
+    return "Ro'yxatdan o'tish";
   }
 
   Future<void> _openForgotPassword() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()));
+    final result = await Navigator.of(context).push<AuthResult>(
+      MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+    );
+    if (!mounted || result == null) return;
+    Navigator.of(context).pop(result);
   }
 
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
-    const mutedText = Color(0xFF8A9A97);
+    final isCompact = MediaQuery.sizeOf(context).height < 720;
+    final topGap = isCompact ? 4.0 : 10.0;
+    final isRegisterFlowStep = _tabController.index == 1 && _registerStep > 0;
+    final isLoginTab = _tabController.index == 0;
+    final isRegisterProfileStep =
+        _tabController.index == 1 && _registerStep == 2;
+    final imageHeight = isRegisterFlowStep
+        ? (isCompact ? 52.0 : 82.0)
+        : (isCompact ? 156.0 : 224.0);
+    final formHeight = isRegisterProfileStep
+        ? (isCompact ? 308.0 : 326.0)
+        : isRegisterFlowStep
+        ? (isCompact ? 202.0 : 216.0)
+        : isLoginTab
+        ? (isCompact ? 178.0 : 188.0)
+        : (isCompact ? 150.0 : 164.0);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -157,99 +396,115 @@ class _AuthScreenState extends State<AuthScreen>
         child: Column(
           children: [
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      color: primaryGreen,
-                      splashRadius: 22,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: Column(
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.arrow_back_rounded, size: 34),
+                        color: primaryGreen,
+                        splashRadius: 24,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 36),
-                  const Center(
-                    child: Text(
+                    SizedBox(height: topGap),
+                    const Text(
                       'Hisobingizga kiring',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: primaryGreen,
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 30),
-                  Container(
-                    height: 42,
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF6F7F8),
-                      borderRadius: BorderRadius.circular(14),
+                    if (!isRegisterFlowStep)
+                      SizedBox(height: isCompact ? 6 : 10),
+                    if (!isRegisterFlowStep)
+                      Image.asset(
+                        'assets/auth1.png',
+                        height: imageHeight,
+                        width: double.infinity,
+                        fit: BoxFit.contain,
+                      )
+                    else
+                      SizedBox(height: imageHeight),
+                    SizedBox(
+                      height: isRegisterFlowStep
+                          ? (isCompact ? 6 : 8)
+                          : (isCompact ? 10 : 18),
                     ),
-                    child: TabBar(
-                      controller: _tabController,
-                      indicatorSize: TabBarIndicatorSize.tab,
-                      dividerColor: Colors.transparent,
-                      labelColor: Colors.white,
-                      unselectedLabelColor: primaryGreen,
-                      labelStyle: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
+                    Container(
+                      height: 58,
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: primaryGreen, width: 1.2),
                       ),
-                      unselectedLabelStyle: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
+                      child: TabBar(
+                        controller: _tabController,
+                        indicatorSize: TabBarIndicatorSize.tab,
+                        dividerColor: Colors.transparent,
+                        labelColor: Colors.white,
+                        unselectedLabelColor: primaryGreen,
+                        labelStyle: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        unselectedLabelStyle: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        indicator: BoxDecoration(
+                          color: primaryGreen,
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        tabs: const [
+                          Tab(text: 'Kirish'),
+                          Tab(text: "Ro'yhatdan o'tish"),
+                        ],
                       ),
-                      indicator: BoxDecoration(
-                        color: primaryGreen,
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      tabs: const [
-                        Tab(text: 'Login'),
-                        Tab(text: 'Register'),
-                      ],
                     ),
-                  ),
-                  SizedBox(
-                    height: _registerStep == 0 ? 260 : 168,
-                    child: TabBarView(
-                      controller: _tabController,
-                      children: [_buildLoginForm(), _buildRegisterForm()],
+                    SizedBox(
+                      height: formHeight,
+                      child: TabBarView(
+                        controller: _tabController,
+                        children: [_buildLoginForm(), _buildRegisterForm()],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
               child: SizedBox(
                 width: double.infinity,
-                height: 52,
+                height: 58,
                 child: ElevatedButton(
-                  onPressed: _handlePrimaryAction,
+                  key: ValueKey(
+                    'auth-primary-${_tabController.index}-$_registerStep',
+                  ),
+                  onPressed: _isSubmitting ? null : _handlePrimaryAction,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryGreen,
+                    disabledBackgroundColor: primaryGreen.withValues(
+                      alpha: 0.72,
+                    ),
                     foregroundColor: Colors.white,
+                    disabledForegroundColor: Colors.white,
+                    elevation: 8,
+                    shadowColor: primaryGreen.withValues(alpha: 0.28),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: AnimatedBuilder(
-                    animation: _tabController,
-                    builder: (context, _) {
-                      return Text(
-                        _primaryButtonText,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      );
-                    },
+                  child: _AuthButtonContent(
+                    isLoading: _isSubmitting,
+                    text: _primaryButtonText,
                   ),
                 ),
               ),
@@ -262,7 +517,7 @@ class _AuthScreenState extends State<AuthScreen>
 
   Widget _buildLoginForm() {
     return Padding(
-      padding: const EdgeInsets.only(top: 18),
+      padding: const EdgeInsets.only(top: 12),
       child: Column(
         children: [
           TextField(
@@ -271,14 +526,15 @@ class _AuthScreenState extends State<AuthScreen>
             cursorColor: const Color(0xFF1F5A50),
             decoration: _inputDecoration('Telefon raqam'),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           TextField(
-            controller: _loginCodeCtrl,
-            keyboardType: TextInputType.number,
+            controller: _loginPasswordCtrl,
+            obscureText: true,
             cursorColor: const Color(0xFF1F5A50),
-            decoration: _inputDecoration('SMS kod'),
+            decoration: _inputDecoration('Parol'),
           ),
-          const SizedBox(height: 8),
+          _InlineMessage(message: _loginMessage, error: _loginError),
+          const SizedBox(height: 6),
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
@@ -301,33 +557,84 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   Widget _buildRegisterForm() {
+    final primaryGreen = const Color(0xFF1F5A50);
+
     if (_registerStep == 1) {
       return Padding(
-        padding: const EdgeInsets.only(top: 18),
+        padding: const EdgeInsets.only(top: 8),
         child: Column(
           children: [
+            _buildRegisterSteps(),
+            const SizedBox(height: 8),
             TextField(
               controller: _registerCodeCtrl,
               keyboardType: TextInputType.number,
-              cursorColor: const Color(0xFF1F5A50),
+              cursorColor: primaryGreen,
               decoration: _inputDecoration('SMS kod'),
             ),
-            const SizedBox(height: 8),
+            _buildRegisterSmsStatus(),
+            _InlineMessage(message: _registerMessage, error: _registerError),
+            const SizedBox(height: 4),
             Align(
-              alignment: Alignment.centerRight,
+              alignment: Alignment.center,
               child: TextButton(
-                onPressed: () => setState(() => _registerStep = 0),
+                onPressed: _goBackToRegisterPhone,
                 style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF1F5A50),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 4,
-                  ),
+                  foregroundColor: primaryGreen,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 child: const Text(
-                  "Ma'lumotlarga qaytish",
+                  "Telefon raqamga qaytish",
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_registerStep == 2) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Column(
+          children: [
+            _buildRegisterSteps(),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _registerFirstCtrl,
+              cursorColor: primaryGreen,
+              decoration: _inputDecoration('Ism'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _registerLastCtrl,
+              cursorColor: primaryGreen,
+              decoration: _inputDecoration('Familiya'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _registerPasswordCtrl,
+              obscureText: true,
+              cursorColor: primaryGreen,
+              decoration: _inputDecoration('Parol'),
+            ),
+            _InlineMessage(message: _registerMessage, error: _registerError),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.center,
+              child: TextButton(
+                onPressed: () => setState(() => _registerStep = 1),
+                style: TextButton.styleFrom(
+                  foregroundColor: primaryGreen,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  'SMS kodga qaytish',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                 ),
               ),
@@ -338,29 +645,186 @@ class _AuthScreenState extends State<AuthScreen>
     }
 
     return Padding(
-      padding: const EdgeInsets.only(top: 18),
+      padding: const EdgeInsets.only(top: 12),
       child: Column(
         children: [
-          TextField(
-            controller: _registerFirstCtrl,
-            cursorColor: const Color(0xFF1F5A50),
-            decoration: _inputDecoration('Ism'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _registerLastCtrl,
-            cursorColor: const Color(0xFF1F5A50),
-            decoration: _inputDecoration('Familiya'),
-          ),
-          const SizedBox(height: 12),
+          _buildRegisterSteps(),
+          const SizedBox(height: 10),
           TextField(
             controller: _registerPhoneCtrl,
             keyboardType: TextInputType.phone,
-            cursorColor: const Color(0xFF1F5A50),
+            cursorColor: primaryGreen,
             decoration: _inputDecoration('Telefon raqami'),
           ),
+          _InlineMessage(message: _registerMessage, error: _registerError),
         ],
       ),
+    );
+  }
+
+  Widget _buildRegisterSteps() {
+    const primaryGreen = Color(0xFF1F5A50);
+
+    return SizedBox(
+      height: 34,
+      child: Center(
+        child: SizedBox(
+          width: 210,
+          child: Row(
+            children: List.generate(5, (slotIndex) {
+              if (slotIndex.isOdd) {
+                final leftStep = slotIndex ~/ 2;
+                final isDone = _registerStep > leftStep;
+
+                return Expanded(
+                  child: Container(
+                    height: 1.4,
+                    color: primaryGreen.withValues(alpha: isDone ? 0.8 : 0.2),
+                  ),
+                );
+              }
+
+              final index = slotIndex ~/ 2;
+              final isActive = _registerStep == index;
+              final isDone = _registerStep > index;
+              final color = isActive || isDone
+                  ? primaryGreen
+                  : primaryGreen.withValues(alpha: 0.28);
+
+              return Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isActive ? primaryGreen : Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color, width: 1.4),
+                ),
+                child: Text(
+                  '${index + 1}',
+                  style: TextStyle(
+                    color: isActive ? Colors.white : color,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRegisterSmsStatus() {
+    const primaryGreen = Color(0xFF1F5A50);
+
+    if (_registerSmsSecondsLeft > 0) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 6),
+        child: Text(
+          'SMS kod $_registerSmsSecondsLeft soniya amal qiladi',
+          style: const TextStyle(
+            color: primaryGreen,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+    }
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton(
+        onPressed: _isSubmitting ? null : _resendRegisterCode,
+        style: TextButton.styleFrom(
+          foregroundColor: primaryGreen,
+          padding: const EdgeInsets.only(top: 6),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: const Text(
+          "SMS kodni qayta so'rash mumkin",
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+        ),
+      ),
+    );
+  }
+
+  void _goBackToRegisterPhone() {
+    _registerSmsTimer?.cancel();
+    setState(() {
+      _registerStep = 0;
+      _registerSmsSecondsLeft = 0;
+      _registrationToken = null;
+      _registerMessage = null;
+      _registerError = null;
+    });
+  }
+}
+
+class _InlineMessage extends StatelessWidget {
+  final String? message;
+  final String? error;
+
+  const _InlineMessage({this.message, this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    final text = error ?? message;
+    if (text == null || text.isEmpty) return const SizedBox.shrink();
+    final isError = error != null;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 4),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: isError ? Colors.redAccent : const Color(0xFF1F5A50),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          height: 1.15,
+        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
+class _AuthButtonContent extends StatelessWidget {
+  final bool isLoading;
+  final String text;
+
+  const _AuthButtonContent({required this.isLoading, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isLoading) {
+      return Text(
+        text,
+        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: const [
+        SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.3,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        ),
+        SizedBox(width: 10),
+        Text(
+          'Kuting...',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        ),
+      ],
     );
   }
 }
@@ -373,74 +837,147 @@ class ForgotPasswordScreen extends StatefulWidget {
 }
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
-  static const _mockSmsCode = '1234';
-
+  final AuthApiService _authApi = AuthApiService();
   final TextEditingController _phoneCtrl = TextEditingController();
   final TextEditingController _codeCtrl = TextEditingController();
+  final TextEditingController _newPasswordCtrl = TextEditingController();
   int _step = 0;
+  bool _isSubmitting = false;
+  String? _message;
+  String? _error;
 
   @override
   void dispose() {
     _phoneCtrl.dispose();
     _codeCtrl.dispose();
+    _newPasswordCtrl.dispose();
     super.dispose();
-  }
-
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   InputDecoration _inputDecoration(String label) {
     const primaryGreen = Color(0xFF1F5A50);
-    const mutedText = Color(0xFF8A9A97);
 
     OutlineInputBorder border(Color color, {double width = 1}) {
       return OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(18),
         borderSide: BorderSide(color: color, width: width),
       );
     }
 
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: mutedText),
+      labelStyle: const TextStyle(
+        color: Color(0xFF1E2E2A),
+        fontSize: 15,
+        fontWeight: FontWeight.w500,
+      ),
       floatingLabelStyle: const TextStyle(
         color: primaryGreen,
+        fontSize: 13,
         fontWeight: FontWeight.w700,
       ),
       filled: true,
-      fillColor: const Color(0xFFF6F7F8),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      enabledBorder: border(primaryGreen.withValues(alpha: 0.12)),
-      focusedBorder: border(primaryGreen, width: 1.4),
+      fillColor: Colors.transparent,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+      enabledBorder: border(primaryGreen.withValues(alpha: 0.22), width: 1.2),
+      focusedBorder: border(primaryGreen, width: 1.5),
       errorBorder: border(Colors.redAccent.withValues(alpha: 0.7)),
       focusedErrorBorder: border(Colors.redAccent, width: 1.4),
     );
   }
 
-  void _handlePrimaryAction() {
+  String _codeMessage(CodeResponse response) {
+    final codeText = response.smsCode == null
+        ? ''
+        : ' Kod: ${response.smsCode}';
+    final expiresText = response.expiresInSeconds == null
+        ? ''
+        : ' ${response.expiresInSeconds} sekund amal qiladi.';
+    return '${response.message}.$codeText$expiresText';
+  }
+
+  void _setMessage({String? message, String? error}) {
+    setState(() {
+      _message = message;
+      _error = error;
+    });
+  }
+
+  Future<void> _handlePrimaryAction() async {
+    if (_isSubmitting) return;
+    final phone = _phoneCtrl.text.trim();
+    final code = _codeCtrl.text.trim();
+    final newPassword = _newPasswordCtrl.text.trim();
     if (_step == 0) {
-      if (_phoneCtrl.text.trim().isEmpty) {
-        _showMessage('Telefon raqamni kiriting');
+      if (phone.isEmpty) {
+        _setMessage(error: 'Telefon raqamni kiriting');
         return;
       }
-      setState(() => _step = 1);
+
+      setState(() {
+        _isSubmitting = true;
+        _message = null;
+        _error = null;
+      });
+      try {
+        final response = await _authApi.requestPasswordResetCode(phone);
+        if (!mounted) return;
+        setState(() {
+          _step = 1;
+          _message = _codeMessage(response);
+        });
+      } on AuthApiException catch (error) {
+        if (!mounted) return;
+        _setMessage(error: error.message);
+      } on Object {
+        if (!mounted) return;
+        _setMessage(error: 'Server bilan bog‘lanib bo‘lmadi');
+      } finally {
+        if (mounted) setState(() => _isSubmitting = false);
+      }
       return;
     }
 
-    if (_codeCtrl.text.trim() != _mockSmsCode) {
-      _showMessage('SMS kod xato');
+    if (code.isEmpty || newPassword.isEmpty) {
+      _setMessage(error: 'SMS kod va yangi parolni kiriting');
       return;
     }
-    _showMessage('Parol tiklash tasdiqlandi');
-    Navigator.of(context).pop();
+    if (newPassword.length < 6) {
+      _setMessage(error: "Parol kamida 6 ta belgidan iborat bo'lishi kerak");
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+    });
+    try {
+      final session = await _authApi.verifyPasswordReset(
+        phone: phone,
+        code: code,
+        newPassword: newPassword,
+      );
+      if (!mounted) return;
+      Navigator.of(
+        context,
+      ).pop(AuthResult(name: session.name, phone: session.phone));
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      _setMessage(error: error.message);
+    } on Object {
+      if (!mounted) return;
+      _setMessage(error: 'Server bilan bog‘lanib bo‘lmadi');
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
+    final isCompact = MediaQuery.sizeOf(context).height < 720;
+    final topGap = isCompact ? 4.0 : 10.0;
+    final imageHeight = isCompact ? 172.0 : 238.0;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -448,94 +985,120 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         child: Column(
           children: [
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      color: primaryGreen,
-                      splashRadius: 22,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: Column(
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.arrow_back_rounded, size: 34),
+                        color: primaryGreen,
+                        splashRadius: 24,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 36),
-                  const Center(
-                    child: Text(
+                    SizedBox(height: topGap),
+                    const Text(
                       'Parolni tiklash',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: primaryGreen,
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 30),
-                  if (_step == 0)
-                    TextField(
-                      controller: _phoneCtrl,
-                      keyboardType: TextInputType.phone,
-                      cursorColor: primaryGreen,
-                      decoration: _inputDecoration('Telefon raqam'),
-                    )
-                  else ...[
-                    TextField(
-                      controller: _codeCtrl,
-                      keyboardType: TextInputType.number,
-                      cursorColor: primaryGreen,
-                      decoration: _inputDecoration('SMS kod'),
+                    SizedBox(height: isCompact ? 10 : 18),
+                    Image.asset(
+                      'assets/auth1.png',
+                      height: imageHeight,
+                      width: double.infinity,
+                      fit: BoxFit.contain,
                     ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () => setState(() => _step = 0),
-                        style: TextButton.styleFrom(
-                          foregroundColor: primaryGreen,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 4,
-                          ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: const Text(
-                          'Telefon raqamni o‘zgartirish',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                    SizedBox(height: isCompact ? 16 : 24),
+                    SizedBox(
+                      height: _step == 0 ? 92 : 200,
+                      child: Column(
+                        children: [
+                          if (_step == 0)
+                            TextField(
+                              controller: _phoneCtrl,
+                              keyboardType: TextInputType.phone,
+                              cursorColor: primaryGreen,
+                              decoration: _inputDecoration('Telefon raqam'),
+                            )
+                          else ...[
+                            TextField(
+                              controller: _codeCtrl,
+                              keyboardType: TextInputType.number,
+                              cursorColor: primaryGreen,
+                              decoration: _inputDecoration('SMS kod'),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _newPasswordCtrl,
+                              obscureText: true,
+                              cursorColor: primaryGreen,
+                              decoration: _inputDecoration('Yangi parol'),
+                            ),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.center,
+                              child: TextButton(
+                                onPressed: () => setState(() => _step = 0),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: primaryGreen,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 4,
+                                  ),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: const Text(
+                                  "Telefon raqamni o'zgartirish",
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                          _InlineMessage(message: _message, error: _error),
+                        ],
                       ),
                     ),
+                    const Spacer(),
                   ],
-                ],
+                ),
               ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
               child: SizedBox(
                 width: double.infinity,
-                height: 52,
+                height: 58,
                 child: ElevatedButton(
-                  onPressed: _handlePrimaryAction,
+                  onPressed: _isSubmitting ? null : _handlePrimaryAction,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryGreen,
+                    disabledBackgroundColor: primaryGreen.withValues(
+                      alpha: 0.72,
+                    ),
                     foregroundColor: Colors.white,
+                    disabledForegroundColor: Colors.white,
+                    elevation: 8,
+                    shadowColor: primaryGreen.withValues(alpha: 0.28),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: Text(
-                    _step == 0 ? 'Davom etish' : 'Tasdiqlash',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  child: _AuthButtonContent(
+                    isLoading: _isSubmitting,
+                    text: _step == 0 ? 'Davom etish' : 'Tasdiqlash',
                   ),
                 ),
               ),
