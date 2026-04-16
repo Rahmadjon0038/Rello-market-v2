@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hello_flutter_app/screens/orders_screen.dart';
 import 'package:hello_flutter_app/screens/pick_location_screen.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -11,8 +12,7 @@ class CartScreen extends StatefulWidget {
   State<CartScreen> createState() => _CartScreenState();
 }
 
-class _CartScreenState extends State<CartScreen>
-    with SingleTickerProviderStateMixin {
+class _CartScreenState extends State<CartScreen> {
   final List<_CartItem> _items = [
     _CartItem(
       id: 1,
@@ -37,14 +37,6 @@ class _CartScreenState extends State<CartScreen>
   String _deliveryPlace = 'Manzil tanlanmagan';
   LatLng? _deliveryPoint;
 
-  AnimationController _createBottomSheetController() {
-    return AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 200),
-      reverseDuration: const Duration(milliseconds: 150),
-    );
-  }
-
   Future<T?> _showFastBottomSheet<T>({
     required WidgetBuilder builder,
     bool isScrollControlled = false,
@@ -55,8 +47,7 @@ class _CartScreenState extends State<CartScreen>
     Color? backgroundColor,
     ShapeBorder? shape,
   }) {
-    final controller = _createBottomSheetController();
-    final future = showModalBottomSheet<T>(
+    return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: isScrollControlled,
       showDragHandle: showDragHandle,
@@ -65,10 +56,8 @@ class _CartScreenState extends State<CartScreen>
       useRootNavigator: useRootNavigator,
       backgroundColor: backgroundColor,
       shape: shape,
-      transitionAnimationController: controller,
       builder: builder,
     );
-    return future.whenComplete(controller.dispose);
   }
 
   Future<T?> _showFastDialog<T>({
@@ -111,6 +100,14 @@ class _CartScreenState extends State<CartScreen>
         _selectedReceiver = 0;
       }
     });
+  }
+
+  _Receiver? _activeReceiver() {
+    if (_receivers.isEmpty) return null;
+    if (_selectedReceiver >= 0 && _selectedReceiver < _receivers.length) {
+      return _receivers[_selectedReceiver];
+    }
+    return _receivers.first;
   }
 
   int _total() {
@@ -266,7 +263,6 @@ class _CartScreenState extends State<CartScreen>
     _showFastBottomSheet(
       isDismissible: true,
       enableDrag: true,
-      useRootNavigator: true,
       showDragHandle: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
@@ -293,8 +289,7 @@ class _CartScreenState extends State<CartScreen>
                       ),
                     ),
                     IconButton(
-                      onPressed: () =>
-                          Navigator.of(ctx, rootNavigator: true).pop(),
+                      onPressed: () => Navigator.of(ctx).pop(),
                       icon: const Icon(Icons.close, size: 20),
                       color: const Color(0xFF0F2F2B),
                       splashRadius: 20,
@@ -305,7 +300,7 @@ class _CartScreenState extends State<CartScreen>
                 _PayOption(
                   title: 'Xarita orqali tanlash',
                   onTap: () {
-                    Navigator.of(ctx, rootNavigator: true).pop();
+                    Navigator.of(ctx).pop();
                     _openMapPicker();
                   },
                 ),
@@ -313,7 +308,7 @@ class _CartScreenState extends State<CartScreen>
                 _PayOption(
                   title: 'Hozirgi joyim (GPS)',
                   onTap: () {
-                    Navigator.of(ctx, rootNavigator: true).pop();
+                    Navigator.of(ctx).pop();
                     _useCurrentLocation();
                   },
                 ),
@@ -321,7 +316,7 @@ class _CartScreenState extends State<CartScreen>
                 _PayOption(
                   title: "Manzilni qo'lda yozish",
                   onTap: () {
-                    Navigator.of(ctx, rootNavigator: true).pop();
+                    Navigator.of(ctx).pop();
                     _openManualAddress();
                   },
                 ),
@@ -665,6 +660,27 @@ class _CartScreenState extends State<CartScreen>
                     ),
                   ),
                 ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const OrdersScreen(),
+                      ),
+                    );
+                  },
+                  child: const Text(
+                    "Buyurtmalaringizni Mening buyurtmalarim sahifasida ko'rishingiz mumkin",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFF0F2F2B),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -676,8 +692,7 @@ class _CartScreenState extends State<CartScreen>
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF0F2F2B);
-    final currentReceiver =
-        _selectedReceiver >= 0 ? _receivers[_selectedReceiver] : null;
+    final currentReceiver = _activeReceiver();
     final canOrder = _items.any((e) => e.selected) &&
         (currentReceiver?.fullName.trim().isNotEmpty ?? false) &&
         (currentReceiver?.phone.trim().length ?? 0) > 3 &&
