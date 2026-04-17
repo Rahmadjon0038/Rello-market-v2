@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:hello_flutter_app/models/product.dart';
 import 'package:hello_flutter_app/screens/orders_screen.dart';
 import 'package:hello_flutter_app/screens/pick_location_screen.dart';
+import 'package:hello_flutter_app/services/auth_api_service.dart';
+import 'package:hello_flutter_app/services/product_api_service.dart';
+import 'package:hello_flutter_app/widgets/product_image.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -13,29 +17,54 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
-  final List<_CartItem> _items = [
-    _CartItem(
-      id: 1,
-      name: 'Smart Blender',
-      price: 1250000,
-      qty: 1,
-      selected: true,
-      imagePath: 'assets/corusel1.png',
-    ),
-    _CartItem(
-      id: 2,
-      name: 'Quloqchin Pro',
-      price: 499000,
-      qty: 2,
-      selected: true,
-      imagePath: 'assets/corusel2.png',
-    ),
-  ];
+  final ProductApiService _productApi = ProductApiService();
+  final List<_CartItem> _items = [];
+  bool _isLoadingCart = true;
+  String? _cartError;
   String _payMethod = 'Click';
   final List<_Receiver> _receivers = [];
   int _selectedReceiver = -1;
   String _deliveryPlace = 'Manzil tanlanmagan';
   LatLng? _deliveryPoint;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCart();
+  }
+
+  Future<void> _loadCart() async {
+    setState(() {
+      _isLoadingCart = true;
+      _cartError = null;
+    });
+    try {
+      final products = await _productApi.getProducts();
+      if (!mounted) return;
+      setState(() {
+        _items
+          ..clear()
+          ..addAll(
+            products
+                .where((product) => product.isCart)
+                .map(_CartItem.fromProduct),
+          );
+        _isLoadingCart = false;
+      });
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _cartError = error.message;
+        _isLoadingCart = false;
+      });
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        _cartError = 'Savatchani yuklab bo‘lmadi';
+        _isLoadingCart = false;
+      });
+    }
+  }
 
   Future<T?> _showFastBottomSheet<T>({
     required WidgetBuilder builder,
@@ -130,27 +159,75 @@ class _CartScreenState extends State<CartScreen> {
     return b.toString();
   }
 
-  void _changeQty(int id, int delta) {
+  Future<void> _changeQty(String id, int delta) async {
+    final idx = _items.indexWhere((e) => e.id == id);
+    if (idx == -1) return;
+    final current = _items[idx];
+    final next = current.qty + delta;
+    final normalized = next < 1 ? 1 : next;
     setState(() {
-      final idx = _items.indexWhere((e) => e.id == id);
-      if (idx == -1) return;
-      final next = _items[idx].qty + delta;
-      _items[idx] = _items[idx].copyWith(qty: next < 1 ? 1 : next);
+      _items[idx] = current.copyWith(qty: normalized);
     });
+    try {
+      final serverQty = await _productApi.addToCart(id, qty: normalized);
+      if (!mounted) return;
+      setState(() {
+        final currentIdx = _items.indexWhere((e) => e.id == id);
+        if (currentIdx != -1) {
+          _items[currentIdx] = _items[currentIdx].copyWith(qty: serverQty);
+        }
+      });
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        final currentIdx = _items.indexWhere((e) => e.id == id);
+        if (currentIdx != -1) _items[currentIdx] = current;
+      });
+      _showSnack('Server bilan bog‘lanib bo‘lmadi');
+    }
   }
 
-  void _removeItem(int id) {
+  Future<void> _removeItem(String id) async {
+    final idx = _items.indexWhere((e) => e.id == id);
+    if (idx == -1) return;
+    final removed = _items[idx];
     setState(() {
       _items.removeWhere((e) => e.id == id);
     });
+    try {
+      await _productApi.removeFromCart(id);
+    } on Object {
+      if (!mounted) return;
+      setState(() => _items.insert(idx, removed));
+      _showSnack('Server bilan bog‘lanib bo‘lmadi');
+    }
   }
 
-  void _toggleSelected(int id) {
+  Future<void> _toggleSelected(String id) async {
     setState(() {
       final idx = _items.indexWhere((e) => e.id == id);
       if (idx == -1) return;
       _items[idx] = _items[idx].copyWith(selected: !_items[idx].selected);
     });
+    final item = _items.firstWhere((e) => e.id == id);
+    try {
+      await _productApi.addToCart(id, qty: item.qty, selected: item.selected);
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        final idx = _items.indexWhere((e) => e.id == id);
+        if (idx != -1) {
+          _items[idx] = _items[idx].copyWith(selected: !item.selected);
+        }
+      });
+      _showSnack('Server bilan bog‘lanib bo‘lmadi');
+    }
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
   }
 
   void _selectPay(String method) {
@@ -737,6 +814,53 @@ class _CartScreenState extends State<CartScreen> {
       return null;
     }
 
+    if (_isLoadingCart) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 28),
+        child: Center(child: CircularProgressIndicator(color: primaryGreen)),
+      );
+    }
+
+    if (_cartError != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: primaryGreen.withOpacity(0.18)),
+          ),
+          child: Column(
+            children: [
+              const Icon(
+                Icons.shopping_cart_outlined,
+                size: 52,
+                color: primaryGreen,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _cartError!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: primaryGreen,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: _loadCart,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Qayta urinish'),
+                style: TextButton.styleFrom(foregroundColor: primaryGreen),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (_items.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -950,7 +1074,7 @@ class _CartScreenState extends State<CartScreen> {
 }
 
 class _CartItem {
-  final int id;
+  final String id;
   final String name;
   final int price;
   final int qty;
@@ -965,6 +1089,17 @@ class _CartItem {
     required this.selected,
     required this.imagePath,
   });
+
+  factory _CartItem.fromProduct(Product product) {
+    return _CartItem(
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      qty: product.cartQty > 0 ? product.cartQty : 1,
+      selected: product.selected,
+      imagePath: product.resolvedImagePath,
+    );
+  }
 
   _CartItem copyWith({int? qty, bool? selected}) {
     return _CartItem(
@@ -1038,11 +1173,9 @@ class _CartCard extends StatelessWidget {
                 },
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: Image.asset(
-                    item.imagePath,
+                  child: SizedBox(
                     width: 72,
-                    height: 72,
-                    fit: BoxFit.cover,
+                    child: ProductImage(path: item.imagePath, height: 72),
                   ),
                 ),
               ),
@@ -1342,7 +1475,15 @@ class _ImagePreview extends StatelessWidget {
       body: SafeArea(
         child: Stack(
           children: [
-            Center(child: InteractiveViewer(child: Image.asset(imagePath))),
+            Center(
+              child: InteractiveViewer(
+                child:
+                    imagePath.startsWith('http://') ||
+                        imagePath.startsWith('https://')
+                    ? Image.network(imagePath)
+                    : Image.asset(imagePath),
+              ),
+            ),
             Positioned(
               top: 12,
               right: 12,

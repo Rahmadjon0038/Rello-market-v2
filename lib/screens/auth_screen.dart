@@ -28,6 +28,7 @@ class _AuthScreenState extends State<AuthScreen>
   final TextEditingController _registerPhoneCtrl = TextEditingController();
   final TextEditingController _registerCodeCtrl = TextEditingController();
   final TextEditingController _registerPasswordCtrl = TextEditingController();
+  final ScrollController _authScrollCtrl = ScrollController();
   Timer? _registerSmsTimer;
   int _registerStep = 0;
   int _registerSmsSecondsLeft = 0;
@@ -58,6 +59,7 @@ class _AuthScreenState extends State<AuthScreen>
     _registerPhoneCtrl.dispose();
     _registerCodeCtrl.dispose();
     _registerPasswordCtrl.dispose();
+    _authScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -370,143 +372,168 @@ class _AuthScreenState extends State<AuthScreen>
     Navigator.of(context).pop(result);
   }
 
+  void _keepAuthActionsAboveKeyboard(bool keyboardOpen) {
+    if (!keyboardOpen) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_authScrollCtrl.hasClients) return;
+      _authScrollCtrl.animateTo(
+        _authScrollCtrl.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    _keepAuthActionsAboveKeyboard(keyboardOpen);
     final isCompact = MediaQuery.sizeOf(context).height < 720;
-    final topGap = isCompact ? 4.0 : 10.0;
+    final topGap = keyboardOpen ? 0.0 : (isCompact ? 4.0 : 10.0);
     final isRegisterFlowStep = _tabController.index == 1 && _registerStep > 0;
     final isLoginTab = _tabController.index == 0;
-    final isRegisterProfileStep =
-        _tabController.index == 1 && _registerStep == 2;
-    final imageHeight = isRegisterFlowStep
+    final imageHeight = keyboardOpen
+        ? 0.0
+        : isRegisterFlowStep
         ? (isCompact ? 52.0 : 82.0)
         : (isCompact ? 156.0 : 224.0);
-    final formHeight = isRegisterProfileStep
-        ? (isCompact ? 308.0 : 326.0)
-        : isRegisterFlowStep
-        ? (isCompact ? 202.0 : 216.0)
-        : isLoginTab
-        ? (isCompact ? 178.0 : 188.0)
-        : (isCompact ? 150.0 : 164.0);
 
     return Scaffold(
       backgroundColor: Colors.white,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                child: Column(
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.arrow_back_rounded, size: 34),
-                        color: primaryGreen,
-                        splashRadius: 24,
-                      ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  controller: _authScrollCtrl,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(20, 64, 20, 16),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight - 80,
                     ),
-                    SizedBox(height: topGap),
-                    const Text(
-                      'Hisobingizga kiring',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: primaryGreen,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                    if (!isRegisterFlowStep)
-                      SizedBox(height: isCompact ? 6 : 10),
-                    if (!isRegisterFlowStep)
-                      Image.asset(
-                        'assets/auth1.png',
-                        height: imageHeight,
-                        width: double.infinity,
-                        fit: BoxFit.contain,
-                      )
-                    else
-                      SizedBox(height: imageHeight),
-                    SizedBox(
-                      height: isRegisterFlowStep
-                          ? (isCompact ? 6 : 8)
-                          : (isCompact ? 10 : 18),
-                    ),
-                    Container(
-                      height: 58,
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: primaryGreen, width: 1.2),
-                      ),
-                      child: TabBar(
-                        controller: _tabController,
-                        indicatorSize: TabBarIndicatorSize.tab,
-                        dividerColor: Colors.transparent,
-                        labelColor: Colors.white,
-                        unselectedLabelColor: primaryGreen,
-                        labelStyle: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
+                    child: Column(
+                      children: [
+                        SizedBox(height: topGap),
+                        const Text(
+                          'Hisobingizga kiring',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: primaryGreen,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0,
+                          ),
                         ),
-                        unselectedLabelStyle: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
+                        if (!keyboardOpen && !isRegisterFlowStep)
+                          SizedBox(height: isCompact ? 6 : 10),
+                        if (!keyboardOpen && !isRegisterFlowStep)
+                          Image.asset(
+                            'assets/auth1.png',
+                            height: imageHeight,
+                            width: double.infinity,
+                            fit: BoxFit.contain,
+                          )
+                        else if (!keyboardOpen)
+                          SizedBox(height: imageHeight),
+                        SizedBox(
+                          height: keyboardOpen
+                              ? 8
+                              : isRegisterFlowStep
+                              ? (isCompact ? 6 : 8)
+                              : (isCompact ? 10 : 18),
                         ),
-                        indicator: BoxDecoration(
-                          color: primaryGreen,
-                          borderRadius: BorderRadius.circular(15),
+                        Container(
+                          height: 58,
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: primaryGreen, width: 1.2),
+                          ),
+                          child: TabBar(
+                            controller: _tabController,
+                            indicatorSize: TabBarIndicatorSize.tab,
+                            dividerColor: Colors.transparent,
+                            labelColor: Colors.white,
+                            unselectedLabelColor: primaryGreen,
+                            labelStyle: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            unselectedLabelStyle: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            indicator: BoxDecoration(
+                              color: primaryGreen,
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            tabs: const [
+                              Tab(text: 'Kirish'),
+                              Tab(text: "Ro'yhatdan o'tish"),
+                            ],
+                          ),
                         ),
-                        tabs: const [
-                          Tab(text: 'Kirish'),
-                          Tab(text: "Ro'yhatdan o'tish"),
-                        ],
-                      ),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 160),
+                          child: KeyedSubtree(
+                            key: ValueKey(
+                              'auth-form-${_tabController.index}-$_registerStep',
+                            ),
+                            child: isLoginTab
+                                ? _buildLoginForm()
+                                : _buildRegisterForm(),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 58,
+                          child: ElevatedButton(
+                            key: ValueKey(
+                              'auth-primary-${_tabController.index}-$_registerStep',
+                            ),
+                            onPressed: _isSubmitting
+                                ? null
+                                : _handlePrimaryAction,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryGreen,
+                              disabledBackgroundColor: primaryGreen.withValues(
+                                alpha: 0.72,
+                              ),
+                              foregroundColor: Colors.white,
+                              disabledForegroundColor: Colors.white,
+                              elevation: 8,
+                              shadowColor: primaryGreen.withValues(alpha: 0.28),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: _AuthButtonContent(
+                              isLoading: _isSubmitting,
+                              text: _primaryButtonText,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    SizedBox(
-                      height: formHeight,
-                      child: TabBarView(
-                        controller: _tabController,
-                        children: [_buildLoginForm(), _buildRegisterForm()],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-              child: SizedBox(
-                width: double.infinity,
-                height: 58,
-                child: ElevatedButton(
-                  key: ValueKey(
-                    'auth-primary-${_tabController.index}-$_registerStep',
-                  ),
-                  onPressed: _isSubmitting ? null : _handlePrimaryAction,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryGreen,
-                    disabledBackgroundColor: primaryGreen.withValues(
-                      alpha: 0.72,
-                    ),
-                    foregroundColor: Colors.white,
-                    disabledForegroundColor: Colors.white,
-                    elevation: 8,
-                    shadowColor: primaryGreen.withValues(alpha: 0.28),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: _AuthButtonContent(
-                    isLoading: _isSubmitting,
-                    text: _primaryButtonText,
-                  ),
-                ),
+            Positioned(
+              top: 8,
+              left: 20,
+              child: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.arrow_back_rounded, size: 34),
+                color: primaryGreen,
+                splashRadius: 24,
               ),
             ),
           ],
@@ -841,6 +868,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final TextEditingController _phoneCtrl = TextEditingController();
   final TextEditingController _codeCtrl = TextEditingController();
   final TextEditingController _newPasswordCtrl = TextEditingController();
+  final ScrollController _forgotScrollCtrl = ScrollController();
   int _step = 0;
   bool _isSubmitting = false;
   String? _message;
@@ -851,6 +879,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     _phoneCtrl.dispose();
     _codeCtrl.dispose();
     _newPasswordCtrl.dispose();
+    _forgotScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -972,135 +1001,161 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     }
   }
 
+  void _keepForgotActionsAboveKeyboard(bool keyboardOpen) {
+    if (!keyboardOpen) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_forgotScrollCtrl.hasClients) return;
+      _forgotScrollCtrl.animateTo(
+        _forgotScrollCtrl.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    _keepForgotActionsAboveKeyboard(keyboardOpen);
     final isCompact = MediaQuery.sizeOf(context).height < 720;
-    final topGap = isCompact ? 4.0 : 10.0;
-    final imageHeight = isCompact ? 172.0 : 238.0;
+    final topGap = keyboardOpen ? 0.0 : (isCompact ? 4.0 : 10.0);
+    final imageHeight = keyboardOpen ? 0.0 : (isCompact ? 172.0 : 238.0);
 
     return Scaffold(
       backgroundColor: Colors.white,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                child: Column(
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.arrow_back_rounded, size: 34),
-                        color: primaryGreen,
-                        splashRadius: 24,
-                      ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  controller: _forgotScrollCtrl,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(20, 64, 20, 16),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight - 80,
                     ),
-                    SizedBox(height: topGap),
-                    const Text(
-                      'Parolni tiklash',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: primaryGreen,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                    SizedBox(height: isCompact ? 10 : 18),
-                    Image.asset(
-                      'assets/auth1.png',
-                      height: imageHeight,
-                      width: double.infinity,
-                      fit: BoxFit.contain,
-                    ),
-                    SizedBox(height: isCompact ? 16 : 24),
-                    SizedBox(
-                      height: _step == 0 ? 92 : 200,
-                      child: Column(
-                        children: [
-                          if (_step == 0)
-                            TextField(
-                              controller: _phoneCtrl,
-                              keyboardType: TextInputType.phone,
-                              cursorColor: primaryGreen,
-                              decoration: _inputDecoration('Telefon raqam'),
-                            )
-                          else ...[
-                            TextField(
-                              controller: _codeCtrl,
-                              keyboardType: TextInputType.number,
-                              cursorColor: primaryGreen,
-                              decoration: _inputDecoration('SMS kod'),
-                            ),
-                            const SizedBox(height: 8),
-                            TextField(
-                              controller: _newPasswordCtrl,
-                              obscureText: true,
-                              cursorColor: primaryGreen,
-                              decoration: _inputDecoration('Yangi parol'),
-                            ),
-                            const SizedBox(height: 8),
-                            Align(
-                              alignment: Alignment.center,
-                              child: TextButton(
-                                onPressed: () => setState(() => _step = 0),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: primaryGreen,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 4,
+                    child: Column(
+                      children: [
+                        SizedBox(height: topGap),
+                        const Text(
+                          'Parolni tiklash',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: primaryGreen,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                        if (!keyboardOpen) ...[
+                          SizedBox(height: isCompact ? 10 : 18),
+                          Image.asset(
+                            'assets/auth1.png',
+                            height: imageHeight,
+                            width: double.infinity,
+                            fit: BoxFit.contain,
+                          ),
+                        ],
+                        SizedBox(
+                          height: keyboardOpen ? 8 : (isCompact ? 16 : 24),
+                        ),
+                        Column(
+                          children: [
+                            if (_step == 0)
+                              TextField(
+                                controller: _phoneCtrl,
+                                keyboardType: TextInputType.phone,
+                                cursorColor: primaryGreen,
+                                decoration: _inputDecoration('Telefon raqam'),
+                              )
+                            else ...[
+                              TextField(
+                                controller: _codeCtrl,
+                                keyboardType: TextInputType.number,
+                                cursorColor: primaryGreen,
+                                decoration: _inputDecoration('SMS kod'),
+                              ),
+                              const SizedBox(height: 8),
+                              TextField(
+                                controller: _newPasswordCtrl,
+                                obscureText: true,
+                                cursorColor: primaryGreen,
+                                decoration: _inputDecoration('Yangi parol'),
+                              ),
+                              const SizedBox(height: 8),
+                              Align(
+                                alignment: Alignment.center,
+                                child: TextButton(
+                                  onPressed: () => setState(() => _step = 0),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: primaryGreen,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 4,
+                                    ),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
                                   ),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                child: const Text(
-                                  "Telefon raqamni o'zgartirish",
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
+                                  child: const Text(
+                                    "Telefon raqamni o'zgartirish",
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
+                            ],
+                            _InlineMessage(message: _message, error: _error),
                           ],
-                          _InlineMessage(message: _message, error: _error),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 58,
+                          child: ElevatedButton(
+                            onPressed: _isSubmitting
+                                ? null
+                                : _handlePrimaryAction,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryGreen,
+                              disabledBackgroundColor: primaryGreen.withValues(
+                                alpha: 0.72,
+                              ),
+                              foregroundColor: Colors.white,
+                              disabledForegroundColor: Colors.white,
+                              elevation: 8,
+                              shadowColor: primaryGreen.withValues(alpha: 0.28),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: _AuthButtonContent(
+                              isLoading: _isSubmitting,
+                              text: _step == 0 ? 'Davom etish' : 'Tasdiqlash',
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const Spacer(),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-              child: SizedBox(
-                width: double.infinity,
-                height: 58,
-                child: ElevatedButton(
-                  onPressed: _isSubmitting ? null : _handlePrimaryAction,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryGreen,
-                    disabledBackgroundColor: primaryGreen.withValues(
-                      alpha: 0.72,
-                    ),
-                    foregroundColor: Colors.white,
-                    disabledForegroundColor: Colors.white,
-                    elevation: 8,
-                    shadowColor: primaryGreen.withValues(alpha: 0.28),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: _AuthButtonContent(
-                    isLoading: _isSubmitting,
-                    text: _step == 0 ? 'Davom etish' : 'Tasdiqlash',
-                  ),
-                ),
+            Positioned(
+              top: 8,
+              left: 20,
+              child: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.arrow_back_rounded, size: 34),
+                color: primaryGreen,
+                splashRadius: 24,
               ),
             ),
           ],

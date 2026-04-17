@@ -1,149 +1,75 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:hello_flutter_app/models/category.dart';
+import 'package:hello_flutter_app/models/product.dart';
+import 'package:hello_flutter_app/screens/product_detail_screen.dart';
+import 'package:hello_flutter_app/services/auth_api_service.dart';
+import 'package:hello_flutter_app/services/product_api_service.dart';
+import 'package:hello_flutter_app/widgets/product_image.dart';
 
 class HomeHeader extends StatefulWidget {
   final bool showContent;
   final bool showSearch;
 
-  const HomeHeader({super.key, this.showContent = true, this.showSearch = true});
+  const HomeHeader({
+    super.key,
+    this.showContent = true,
+    this.showSearch = true,
+  });
 
   @override
   State<HomeHeader> createState() => _HomeHeaderState();
 }
 
 class _HomeHeaderState extends State<HomeHeader>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   bool _showSearch = false;
   String _selectedLang = "UZ";
-  int _selectedCategoryId = 0;
-  final Set<int> _likedProductIds = {};
+  String? _selectedCategoryId;
+  bool _isLoadingProducts = true;
+  String? _productsError;
   AnimationController? _sheetController;
   PageController? _carouselController;
   Timer? _carouselTimer;
   int _carouselIndex = 0;
-
-  final List<_CarouselItem> _carouselItems = const [
-    _CarouselItem(
-      id: 1,
-      name: 'Yangi Aksiyalar',
-      description: 'Eng yaxshi takliflar',
-      price: '1 250 000 so‘m',
-      imagePath: 'assets/corusel1.png',
-    ),
-    _CarouselItem(
-      id: 2,
-      name: 'Elektronika',
-      description: 'Katta chegirmalar',
-      price: '3 499 000 so‘m',
-      imagePath: 'assets/corusel2.png',
-    ),
-    _CarouselItem(
-      id: 3,
-      name: 'Kiyimlar',
-      description: 'Bahor kolleksiyasi',
-      price: '299 000 so‘m',
-      imagePath: 'assets/corusel3.png',
-    ),
-  ];
-
-  final List<_CategoryItem> _categories = const [
-    _CategoryItem(
-      id: 0,
-      name: 'Barchasi',
-      icon: Icons.grid_view_rounded,
-      color: Color(0xFF2E7D6F),
-    ),
-    _CategoryItem(
-      id: 1,
-      name: 'Maishiy texnika',
-      icon: Icons.kitchen_rounded,
-      color: Color(0xFF4F8CC9),
-    ),
-    _CategoryItem(
-      id: 2,
-      name: 'Kiyim-kechak',
-      icon: Icons.checkroom_rounded,
-      color: Color(0xFF9B59B6),
-    ),
-    _CategoryItem(
-      id: 3,
-      name: 'Poyabzallar',
-      icon: Icons.hiking_rounded,
-      color: Color(0xFF2DB783),
-    ),
-    _CategoryItem(
-      id: 4,
-      name: 'Elektronika',
-      icon: Icons.devices_rounded,
-      color: Color(0xFFE67E22),
-    ),
-    _CategoryItem(
-      id: 5,
-      name: 'Mebellar',
-      icon: Icons.chair_rounded,
-      color: Color(0xFF1F8A70),
-    ),
-  ];
-
-  final List<_ProductItem> _products = const [
-    _ProductItem(
-      id: 1,
-      categoryId: 1,
-      name: 'Smart Blender',
-      description: 'Tez va sokin ishlaydi, 5 xil rejim.',
-      price: '1 250 000 so‘m',
-      imagePath: 'assets/corusel1.png',
-    ),
-    _ProductItem(
-      id: 2,
-      categoryId: 4,
-      name: 'Quloqchin Pro',
-      description: 'Yuqori sifatli ovoz, 24 soat battery.',
-      price: '499 000 so‘m',
-      imagePath: 'assets/corusel2.png',
-    ),
-    _ProductItem(
-      id: 3,
-      categoryId: 2,
-      name: 'Kurtka Classic',
-      description: 'Kuz-bahor uchun qulay va yengil.',
-      price: '359 000 so‘m',
-      imagePath: 'assets/corusel3.png',
-    ),
-    _ProductItem(
-      id: 4,
-      categoryId: 3,
-      name: 'Krossovka Air',
-      description: 'Yumshoq taglik, sport uchun ideal.',
-      price: '289 000 so‘m',
-      imagePath: 'assets/corusel1.png',
-    ),
-    _ProductItem(
-      id: 5,
-      categoryId: 5,
-      name: 'Yumshoq stul',
-      description: 'Minimalist dizayn, mustahkam.',
-      price: '799 000 so‘m',
-      imagePath: 'assets/corusel2.png',
-    ),
-  ];
+  final ProductApiService _productApi = ProductApiService();
+  List<Product> _products = [];
+  List<Product> _carouselProducts = [];
+  List<CategoryModel> _categories = [];
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadHomeData();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _carouselTimer?.cancel();
     _carouselController?.dispose();
     _sheetController?.dispose();
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant HomeHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.showContent && widget.showContent) {
+      _loadHomeData();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && widget.showContent) {
+      _loadHomeData();
+    }
+  }
+
   void _openLanguageSheet() {
-    const primaryGreen = Color(0xFF1F5A50);
     _sheetController ??= AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 160),
@@ -209,10 +135,157 @@ class _HomeHeaderState extends State<HomeHeader>
     );
   }
 
+  Future<void> _loadHomeData() async {
+    setState(() {
+      _isLoadingProducts = true;
+      _productsError = null;
+    });
+    try {
+      final categories = await _productApi.getCategories();
+      final carouselProducts = await _productApi.getCarousel();
+      final products = await _productApi.getProducts(
+        categoryId: _selectedCategoryId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _categories = categories;
+        _carouselProducts = carouselProducts;
+        _products = products;
+        _isLoadingProducts = false;
+        if (_carouselIndex >= _carouselProducts.length) {
+          _carouselIndex = 0;
+        }
+      });
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        _productsError = 'Mahsulotlarni yuklab bo‘lmadi';
+        _isLoadingProducts = false;
+      });
+    }
+  }
+
+  Future<void> _loadProducts() async {
+    setState(() {
+      _isLoadingProducts = true;
+      _productsError = null;
+    });
+    try {
+      final products = await _productApi.getProducts(
+        categoryId: _selectedCategoryId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _products = products;
+        _isLoadingProducts = false;
+      });
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        _productsError = 'Mahsulotlarni yuklab bo‘lmadi';
+        _isLoadingProducts = false;
+      });
+    }
+  }
+
+  Future<void> _selectCategory(String? categoryId) async {
+    if (_selectedCategoryId == categoryId) return;
+    setState(() => _selectedCategoryId = categoryId);
+    await _loadProducts();
+  }
+
+  Future<void> _toggleLike(Product product) async {
+    final idx = _products.indexWhere((item) => item.id == product.id);
+    if (idx == -1) return;
+    final nextLiked = !product.isLiked;
+    setState(() {
+      _products[idx] = product.copyWith(isLiked: nextLiked);
+    });
+    try {
+      final serverLiked = nextLiked
+          ? await _productApi.likeProduct(product.id)
+          : await _productApi.unlikeProduct(product.id);
+      if (!mounted) return;
+      setState(() {
+        final currentIdx = _products.indexWhere(
+          (item) => item.id == product.id,
+        );
+        if (currentIdx != -1) {
+          _products[currentIdx] = _products[currentIdx].copyWith(
+            isLiked: serverLiked,
+          );
+        }
+      });
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        final currentIdx = _products.indexWhere(
+          (item) => item.id == product.id,
+        );
+        if (currentIdx != -1) {
+          _products[currentIdx] = _products[currentIdx].copyWith(
+            isLiked: product.isLiked,
+          );
+        }
+      });
+      _showSnack(error.message);
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        final currentIdx = _products.indexWhere(
+          (item) => item.id == product.id,
+        );
+        if (currentIdx != -1) {
+          _products[currentIdx] = _products[currentIdx].copyWith(
+            isLiked: product.isLiked,
+          );
+        }
+      });
+      _showSnack('Server bilan bog‘lanib bo‘lmadi');
+    }
+  }
+
+  Future<void> _addToCart(Product product) async {
+    final qty = product.cartQty > 0 ? product.cartQty + 1 : 1;
+    try {
+      final serverQty = await _productApi.addToCart(product.id, qty: qty);
+      if (!mounted) return;
+      setState(() {
+        final idx = _products.indexWhere((item) => item.id == product.id);
+        if (idx != -1) {
+          _products[idx] = _products[idx].copyWith(
+            isCart: true,
+            cartQty: serverQty,
+          );
+        }
+      });
+      _showSnack('Mahsulot savatchaga qo‘shildi');
+    } on AuthApiException catch (error) {
+      _showSnack(error.message);
+    } on Object {
+      _showSnack('Server bilan bog‘lanib bo‘lmadi');
+    }
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
+  }
+
+  Future<void> _openProductDetail(Product product) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProductDetailScreen(productId: product.id),
+      ),
+    );
+    if (!mounted) return;
+    _loadProducts();
+  }
+
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
-    const lightGreen = Color(0xFFE6F4EF);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -242,10 +315,7 @@ class _HomeHeaderState extends State<HomeHeader>
                     borderRadius: BorderRadius.circular(14),
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: Image.asset(
-                    'assets/logo.jpg',
-                    fit: BoxFit.cover,
-                  ),
+                  child: Image.asset('assets/logo.jpg', fit: BoxFit.cover),
                 ),
                 const SizedBox(width: 10),
                 const Expanded(
@@ -284,8 +354,9 @@ class _HomeHeaderState extends State<HomeHeader>
                 _HeaderIconButton(
                   onTap: _openLanguageSheet,
                   child: _LangFlag(
-                    assetPath:
-                        _selectedLang == "UZ" ? 'assets/uz.png' : 'assets/en.png',
+                    assetPath: _selectedLang == "UZ"
+                        ? 'assets/uz.png'
+                        : 'assets/en.png',
                   ),
                 ),
               ],
@@ -307,10 +378,7 @@ class _HomeHeaderState extends State<HomeHeader>
                   axisAlignment: -1,
                   child: FadeTransition(
                     opacity: animation,
-                    child: SlideTransition(
-                      position: slide,
-                      child: child,
-                    ),
+                    child: SlideTransition(position: slide, child: child),
                   ),
                 );
               },
@@ -339,14 +407,18 @@ class _HomeHeaderState extends State<HomeHeader>
                           ),
                           decoration: InputDecoration(
                             hintText: 'Mahsulot qidirish...',
-                            hintStyle:
-                                TextStyle(color: primaryGreen.withOpacity(0.5)),
-                            prefixIcon:
-                                const Icon(Icons.search, color: primaryGreen),
+                            hintStyle: TextStyle(
+                              color: primaryGreen.withOpacity(0.5),
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search,
+                              color: primaryGreen,
+                            ),
                             filled: true,
                             fillColor: Colors.white,
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 14),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                            ),
                             isDense: true,
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
@@ -372,41 +444,48 @@ class _HomeHeaderState extends State<HomeHeader>
           if (widget.showContent) ...[
             const SizedBox(height: 20),
 
-            SizedBox(
-              height: 180,
-              child: PageView.builder(
-                controller: _ensureCarousel(),
-                itemCount: _carouselItems.length,
-                padEnds: false,
-                clipBehavior: Clip.hardEdge,
-                onPageChanged: (index) {
-                  setState(() => _carouselIndex = index);
-                },
-                itemBuilder: (context, index) {
-                  final item = _carouselItems[index];
-                  return _CarouselCard(item: item);
-                },
+            if (_carouselProducts.isNotEmpty)
+              SizedBox(
+                height: 180,
+                child: PageView.builder(
+                  controller: _ensureCarousel(),
+                  itemCount: _carouselProducts.length,
+                  padEnds: false,
+                  clipBehavior: Clip.hardEdge,
+                  onPageChanged: (index) {
+                    setState(() => _carouselIndex = index);
+                  },
+                  itemBuilder: (context, index) {
+                    final item = _carouselProducts[index];
+                    return _CarouselCard(
+                      item: item,
+                      onTap: () => _openProductDetail(item),
+                    );
+                  },
+                ),
               ),
-            ),
 
-            const SizedBox(height: 8),
+            if (_carouselProducts.isNotEmpty) const SizedBox(height: 8),
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(_carouselItems.length, (index) {
-                final active = index == _carouselIndex;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width: active ? 16 : 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: active ? primaryGreen : primaryGreen.withOpacity(0.25),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                );
-              }),
-            ),
+            if (_carouselProducts.isNotEmpty)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_carouselProducts.length, (index) {
+                  final active = index == _carouselIndex;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: active ? 16 : 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: active
+                          ? primaryGreen
+                          : primaryGreen.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  );
+                }),
+              ),
 
             const SizedBox(height: 14),
 
@@ -414,16 +493,22 @@ class _HomeHeaderState extends State<HomeHeader>
               height: 42,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: _categories.length,
+                itemCount: _categories.length + 1,
                 separatorBuilder: (_, __) => const SizedBox(width: 10),
                 itemBuilder: (context, index) {
-                  final c = _categories[index];
+                  if (index == 0) {
+                    return _CategoryChip(
+                      name: 'Barchasi',
+                      selected: _selectedCategoryId == null,
+                      onTap: () => _selectCategory(null),
+                    );
+                  }
+                  final c = _categories[index - 1];
                   return _CategoryChip(
-                    item: c,
+                    name: c.name,
+                    icon: c.icon,
                     selected: c.id == _selectedCategoryId,
-                    onTap: () {
-                      setState(() => _selectedCategoryId = c.id);
-                    },
+                    onTap: () => _selectCategory(c.id),
                   );
                 },
               ),
@@ -431,34 +516,44 @@ class _HomeHeaderState extends State<HomeHeader>
 
             const SizedBox(height: 16),
 
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _filteredProducts().length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.62,
+            if (_isLoadingProducts)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 28),
+                child: Center(
+                  child: CircularProgressIndicator(color: primaryGreen),
+                ),
+              )
+            else if (_productsError != null)
+              _ProductsStateCard(
+                message: _productsError!,
+                onRetry: _loadProducts,
+              )
+            else if (_products.isEmpty)
+              _ProductsStateCard(
+                message: 'Mahsulotlar topilmadi',
+                onRetry: _loadProducts,
+              )
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _products.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 0.62,
+                ),
+                itemBuilder: (context, index) {
+                  final p = _products[index];
+                  return _ProductCard(
+                    item: p,
+                    onTap: () => _openProductDetail(p),
+                    onLike: () => _toggleLike(p),
+                    onAddToCart: () => _addToCart(p),
+                  );
+                },
               ),
-              itemBuilder: (context, index) {
-                final p = _filteredProducts()[index];
-                return _ProductCard(
-                  item: p,
-                  liked: _likedProductIds.contains(p.id),
-                  onLike: () {
-                    setState(() {
-                      if (_likedProductIds.contains(p.id)) {
-                        _likedProductIds.remove(p.id);
-                      } else {
-                        _likedProductIds.add(p.id);
-                      }
-                    });
-                  },
-                  onAddToCart: () {},
-                );
-              },
-            ),
           ],
         ],
       ),
@@ -467,19 +562,18 @@ class _HomeHeaderState extends State<HomeHeader>
 
   void _startCarousel() {
     _carouselTimer?.cancel();
-    _carouselTimer = Timer.periodic(
-      const Duration(seconds: 4),
-      (_) {
-        if (!mounted) return;
-        if (_carouselController == null) return;
-        final next = (_carouselIndex + 1) % _carouselItems.length;
-        _carouselController!.animateToPage(
-          next,
-          duration: const Duration(milliseconds: 450),
-          curve: Curves.easeOutCubic,
-        );
-      },
-    );
+    if (_carouselProducts.isEmpty) return;
+    _carouselTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted) return;
+      if (_carouselController == null) return;
+      if (_carouselProducts.isEmpty) return;
+      final next = (_carouselIndex + 1) % _carouselProducts.length;
+      _carouselController!.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 
   PageController _ensureCarousel() {
@@ -490,13 +584,6 @@ class _HomeHeaderState extends State<HomeHeader>
     }
     _startCarousel();
     return _carouselController!;
-  }
-
-  List<_ProductItem> _filteredProducts() {
-    if (_selectedCategoryId == 0) return _products;
-    return _products
-        .where((p) => p.categoryId == _selectedCategoryId)
-        .toList();
   }
 }
 
@@ -540,11 +627,7 @@ class _HeaderIconButton extends StatelessWidget {
   final Widget? child;
   final VoidCallback onTap;
 
-  const _HeaderIconButton({
-    this.icon,
-    this.child,
-    required this.onTap,
-  });
+  const _HeaderIconButton({this.icon, this.child, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -573,10 +656,7 @@ class _HeaderIconButton extends StatelessWidget {
               : SizedBox(
                   width: 28,
                   height: 20,
-                  child: FittedBox(
-                    fit: BoxFit.contain,
-                    child: child,
-                  ),
+                  child: FittedBox(fit: BoxFit.contain, child: child),
                 ),
         ),
       ),
@@ -610,10 +690,7 @@ class _LangOption extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? lightGreen : Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: primaryGreen.withOpacity(0.2),
-            width: 1,
-          ),
+          border: Border.all(color: primaryGreen.withOpacity(0.2), width: 1),
         ),
         child: Row(
           children: [
@@ -639,26 +716,11 @@ class _LangOption extends StatelessWidget {
   }
 }
 
-class _CarouselItem {
-  final int id;
-  final String name;
-  final String description;
-  final String price;
-  final String imagePath;
-
-  const _CarouselItem({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.price,
-    required this.imagePath,
-  });
-}
-
 class _CarouselCard extends StatelessWidget {
-  final _CarouselItem item;
+  final Product item;
+  final VoidCallback onTap;
 
-  const _CarouselCard({required this.item});
+  const _CarouselCard({required this.item, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -666,19 +728,19 @@ class _CarouselCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 0),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: () {},
+        onTap: onTap,
         child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            image: DecorationImage(
-              image: AssetImage(item.imagePath),
-              fit: BoxFit.cover,
-            ),
-          ),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(20)),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: Stack(
               children: [
+                Positioned.fill(
+                  child: ProductImage(
+                    path: item.resolvedImagePath,
+                    height: 180,
+                  ),
+                ),
                 Positioned.fill(
                   child: Container(
                     decoration: const BoxDecoration(
@@ -703,6 +765,8 @@ class _CarouselCard extends StatelessWidget {
                     children: [
                       Text(
                         item.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 18,
@@ -712,6 +776,8 @@ class _CarouselCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         item.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 12,
@@ -728,7 +794,7 @@ class _CarouselCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          item.price,
+                          item.formattedPrice,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -748,27 +814,49 @@ class _CarouselCard extends StatelessWidget {
   }
 }
 
-class _CategoryItem {
-  final int id;
-  final String name;
-  final IconData icon;
-  final Color color;
+class _CategoryIcon extends StatelessWidget {
+  final String icon;
+  final bool selected;
 
-  const _CategoryItem({
-    required this.id,
-    required this.name,
-    required this.icon,
-    required this.color,
-  });
+  const _CategoryIcon({required this.icon, required this.selected});
+
+  @override
+  Widget build(BuildContext context) {
+    final iconColor = selected ? Colors.white : const Color(0xFF2E7D6F);
+    if (icon.isEmpty) {
+      return Icon(Icons.grid_view_rounded, color: iconColor, size: 14);
+    }
+    final resolvedIcon = Product.resolveImagePath(icon);
+    final fallback = Icon(Icons.category_rounded, color: iconColor, size: 14);
+    if (resolvedIcon.startsWith('http://') ||
+        resolvedIcon.startsWith('https://')) {
+      return Image.network(
+        resolvedIcon,
+        width: 14,
+        height: 14,
+        color: iconColor,
+        errorBuilder: (context, error, stackTrace) => fallback,
+      );
+    }
+    return Image.asset(
+      resolvedIcon,
+      width: 14,
+      height: 14,
+      color: iconColor,
+      errorBuilder: (context, error, stackTrace) => fallback,
+    );
+  }
 }
 
 class _CategoryChip extends StatelessWidget {
-  final _CategoryItem item;
+  final String name;
+  final String icon;
   final bool selected;
   final VoidCallback onTap;
 
   const _CategoryChip({
-    required this.item,
+    required this.name,
+    this.icon = '',
     required this.selected,
     required this.onTap,
   });
@@ -795,14 +883,10 @@ class _CategoryChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              item.icon,
-              color: selected ? Colors.white : item.color,
-              size: 14,
-            ),
+            _CategoryIcon(icon: icon, selected: selected),
             const SizedBox(width: 6),
             Text(
-              item.name,
+              name,
               style: TextStyle(
                 color: selected ? Colors.white : const Color(0xFF1F5A50),
                 fontSize: 11,
@@ -816,33 +900,15 @@ class _CategoryChip extends StatelessWidget {
   }
 }
 
-class _ProductItem {
-  final int id;
-  final int categoryId;
-  final String name;
-  final String description;
-  final String price;
-  final String imagePath;
-
-  const _ProductItem({
-    required this.id,
-    required this.categoryId,
-    required this.name,
-    required this.description,
-    required this.price,
-    required this.imagePath,
-  });
-}
-
 class _ProductCard extends StatelessWidget {
-  final _ProductItem item;
-  final bool liked;
+  final Product item;
+  final VoidCallback onTap;
   final VoidCallback onLike;
   final VoidCallback onAddToCart;
 
   const _ProductCard({
     required this.item,
-    required this.liked,
+    required this.onTap,
     required this.onLike,
     required this.onAddToCart,
   });
@@ -850,124 +916,175 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
-    const softGray = Color(0xFFF6F7F8);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+            border: Border.all(color: primaryGreen.withOpacity(0.12)),
           ),
-        ],
-        border: Border.all(color: primaryGreen.withOpacity(0.12)),
-      ),
-      child: Stack(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Stack(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.asset(
-                  item.imagePath,
-                  width: double.infinity,
-                  height: 108,
-                  fit: BoxFit.cover,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: ProductImage(
+                      path: item.resolvedImagePath,
+                      height: 108,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: primaryGreen,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          item.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: primaryGreen.withOpacity(0.7),
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          item.formattedPrice,
+                          style: const TextStyle(
+                            color: primaryGreen,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                    child: SizedBox(
+                      height: 32,
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryGreen,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                        ),
+                        onPressed: onAddToCart,
+                        icon: Icon(
+                          item.isCart
+                              ? Icons.shopping_cart_checkout
+                              : Icons.add_shopping_cart,
+                          size: 16,
+                        ),
+                        label: Text(
+                          item.isCart ? 'Savatda' : 'Savatga',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: primaryGreen,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      item.description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: primaryGreen.withOpacity(0.7),
-                        fontSize: 11,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      item.price,
-                      style: const TextStyle(
-                        color: primaryGreen,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+              Positioned(
+                top: 6,
+                right: 6,
                 child: SizedBox(
-                  height: 32,
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryGreen,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                  width: 34,
+                  height: 34,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: primaryGreen.withOpacity(0.08)),
                     ),
-                    onPressed: onAddToCart,
-                    icon: const Icon(Icons.add_shopping_cart, size: 16),
-                    label: const Text(
-                      'Savatga',
-                      style:
-                          TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: onLike,
+                      icon: Icon(
+                        item.isLiked ? Icons.favorite : Icons.favorite_border,
+                        color: item.isLiked ? Colors.redAccent : primaryGreen,
+                        size: 18,
+                      ),
                     ),
                   ),
                 ),
               ),
             ],
           ),
-          Positioned(
-            top: 6,
-            right: 6,
-            child: SizedBox(
-              width: 34,
-              height: 34,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: primaryGreen.withOpacity(0.08),
-                  ),
-                ),
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  onPressed: onLike,
-                  icon: Icon(
-                    liked ? Icons.favorite : Icons.favorite_border,
-                    color: liked ? Colors.redAccent : primaryGreen,
-                    size: 18,
-                  ),
-                ),
-              ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProductsStateCard extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _ProductsStateCard({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: primaryGreen.withOpacity(0.12)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: primaryGreen,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
             ),
+          ),
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('Qayta urinish'),
+            style: TextButton.styleFrom(foregroundColor: primaryGreen),
           ),
         ],
       ),

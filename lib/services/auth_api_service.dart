@@ -68,6 +68,7 @@ class AuthSession {
   final String phone;
   final String username;
   final String role;
+  final String? profileImg;
   final String accessToken;
   final String refreshToken;
 
@@ -76,6 +77,7 @@ class AuthSession {
     required this.phone,
     required this.username,
     required this.role,
+    this.profileImg,
     required this.accessToken,
     required this.refreshToken,
   });
@@ -84,11 +86,14 @@ class AuthSession {
 class AuthApiService {
   AuthApiService({HttpClient? client}) : _client = client ?? HttpClient();
 
+  static String get baseUrlForFiles => ApiConfig.baseUrl;
+
   static const _accessTokenKey = 'auth_access_token';
   static const _refreshTokenKey = 'auth_refresh_token';
   static const _nameKey = 'auth_name';
   static const _phoneKey = 'auth_phone';
   static const _roleKey = 'auth_role';
+  static const _profileImgKey = 'auth_profile_img';
 
   final HttpClient _client;
 
@@ -172,6 +177,79 @@ class AuthApiService {
     return session;
   }
 
+  Future<AuthSession> updateProfile({
+    required String fullName,
+    File? profileImg,
+  }) async {
+    final currentSession = await loadSavedSession();
+    if (currentSession == null) {
+      throw const AuthApiException('Avval tizimga kiring');
+    }
+
+    final nameParts = fullName.trim().split(RegExp(r'\s+'));
+    final firstName = nameParts.isNotEmpty ? nameParts.first : '';
+    final lastName = nameParts.length > 1 ? nameParts.skip(1).join(' ') : '';
+    final data = await _patchMultipart(
+      '/me',
+      fields: {'firstName': firstName, 'lastName': lastName},
+      fileField: 'profileImg',
+      file: profileImg,
+      accessToken: currentSession.accessToken,
+    );
+
+    final updatedSession = _sessionFromProfileJson(
+      data,
+      fallback: AuthSession(
+        name: fullName.trim().isEmpty ? currentSession.name : fullName.trim(),
+        phone: currentSession.phone,
+        username: currentSession.username,
+        role: currentSession.role,
+        profileImg: currentSession.profileImg,
+        accessToken: currentSession.accessToken,
+        refreshToken: currentSession.refreshToken,
+      ),
+    );
+    await saveSession(updatedSession);
+    return updatedSession;
+  }
+
+  Future<CodeResponse> requestPhoneChangeCode({
+    required String oldPhone,
+    required String newPhone,
+  }) async {
+    final currentSession = await loadSavedSession();
+    if (currentSession == null) {
+      throw const AuthApiException('Avval tizimga kiring');
+    }
+    final data = await _sendJson(
+      method: 'POST',
+      path: '/me/phone/request-code',
+      body: {'oldPhone': oldPhone, 'newPhone': newPhone},
+      accessToken: currentSession.accessToken,
+    );
+    return CodeResponse.fromJson(data);
+  }
+
+  Future<AuthSession> verifyPhoneChangeCode({
+    required String oldPhone,
+    required String newPhone,
+    required String code,
+  }) async {
+    final currentSession = await loadSavedSession();
+    if (currentSession == null) {
+      throw const AuthApiException('Avval tizimga kiring');
+    }
+    final data = await _sendJson(
+      method: 'POST',
+      path: '/me/phone/verify',
+      body: {'oldPhone': oldPhone, 'newPhone': newPhone, 'code': code},
+      accessToken: currentSession.accessToken,
+    );
+    final session = _sessionFromProfileJson(data, fallback: currentSession);
+    await saveSession(session);
+    return session;
+  }
+
   Future<AuthSession?> loadSavedSession() async {
     final prefs = await SharedPreferences.getInstance();
     final accessToken = prefs.getString(_accessTokenKey);
@@ -185,6 +263,7 @@ class AuthApiService {
       phone: phone,
       username: phone,
       role: prefs.getString(_roleKey) ?? 'user',
+      profileImg: prefs.getString(_profileImgKey),
       accessToken: accessToken,
       refreshToken: refreshToken,
     );
@@ -197,6 +276,12 @@ class AuthApiService {
     await prefs.setString(_nameKey, session.name);
     await prefs.setString(_phoneKey, session.phone);
     await prefs.setString(_roleKey, session.role);
+    final profileImg = session.profileImg;
+    if (profileImg == null || profileImg.isEmpty) {
+      await prefs.remove(_profileImgKey);
+    } else {
+      await prefs.setString(_profileImgKey, profileImg);
+    }
   }
 
   Future<void> clearSession() async {
@@ -206,6 +291,7 @@ class AuthApiService {
     await prefs.remove(_nameKey);
     await prefs.remove(_phoneKey);
     await prefs.remove(_roleKey);
+    await prefs.remove(_profileImgKey);
   }
 
   AuthSession _sessionFromJson(
@@ -230,6 +316,7 @@ class AuthApiService {
       phone: phone,
       username: json['username']?.toString() ?? phone,
       role: json['role']?.toString() ?? 'user',
+      profileImg: json['profileImg']?.toString(),
       accessToken: accessToken,
       refreshToken: refreshToken,
     );
@@ -238,28 +325,49 @@ class AuthApiService {
   Future<AuthSession> _withProfile(AuthSession fallback) async {
     try {
       final data = await _get('/me', accessToken: fallback.accessToken);
-      final firstName = data['firstName']?.toString().trim() ?? '';
-      final lastName = data['lastName']?.toString().trim() ?? '';
-      final fullName = [
-        firstName,
-        lastName,
-      ].where((part) => part.isNotEmpty).join(' ').trim();
-      final tokens = data['tokens'];
-      return AuthSession(
-        name: fullName.isNotEmpty ? fullName : fallback.name,
-        phone: data['phone']?.toString() ?? fallback.phone,
-        username: data['username']?.toString() ?? fallback.username,
-        role: data['role']?.toString() ?? fallback.role,
-        accessToken: tokens is Map<String, dynamic>
-            ? tokens['accessToken']?.toString() ?? fallback.accessToken
-            : fallback.accessToken,
-        refreshToken: tokens is Map<String, dynamic>
-            ? tokens['refreshToken']?.toString() ?? fallback.refreshToken
-            : fallback.refreshToken,
-      );
+      return _sessionFromProfileJson(data, fallback: fallback);
     } on Object {
       return fallback;
     }
+  }
+
+  AuthSession _sessionFromProfileJson(
+    Map<String, dynamic> json, {
+    required AuthSession fallback,
+  }) {
+    final profile = json['user'] is Map<String, dynamic>
+        ? json['user'] as Map<String, dynamic>
+        : json['profile'] is Map<String, dynamic>
+        ? json['profile'] as Map<String, dynamic>
+        : json;
+    final firstName = profile['firstName']?.toString().trim() ?? '';
+    final lastName = profile['lastName']?.toString().trim() ?? '';
+    final fullName = [
+      firstName,
+      lastName,
+    ].where((part) => part.isNotEmpty).join(' ').trim();
+    final tokens = json['tokens'] is Map<String, dynamic>
+        ? json['tokens'] as Map<String, dynamic>
+        : profile['tokens'] is Map<String, dynamic>
+        ? profile['tokens'] as Map<String, dynamic>
+        : null;
+    return AuthSession(
+      name: fullName.isNotEmpty
+          ? fullName
+          : profile['name']?.toString() ?? fallback.name,
+      phone: profile['phone']?.toString() ?? fallback.phone,
+      username: profile['username']?.toString() ?? fallback.username,
+      role: profile['role']?.toString() ?? fallback.role,
+      profileImg: profile['profileImg']?.toString() ?? fallback.profileImg,
+      accessToken:
+          json['accessToken']?.toString() ??
+          tokens?['accessToken']?.toString() ??
+          fallback.accessToken,
+      refreshToken:
+          json['refreshToken']?.toString() ??
+          tokens?['refreshToken']?.toString() ??
+          fallback.refreshToken,
+    );
   }
 
   Future<Map<String, dynamic>> _post(
@@ -270,6 +378,60 @@ class AuthApiService {
     final request = await _client.postUrl(uri);
     request.headers.contentType = ContentType.json;
     request.write(jsonEncode(body));
+    final response = await request.close();
+    final rawBody = await response.transform(utf8.decoder).join();
+    final decoded = _decodeJson(rawBody);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(
+        decoded['error']?.toString() ??
+            decoded['message']?.toString() ??
+            'Server xatosi',
+        statusCode: response.statusCode,
+      );
+    }
+
+    return decoded;
+  }
+
+  Future<Map<String, dynamic>> _patchMultipart(
+    String path, {
+    required Map<String, String> fields,
+    required String fileField,
+    File? file,
+    required String accessToken,
+  }) async {
+    final boundary = '----RelloMarket${DateTime.now().microsecondsSinceEpoch}';
+    final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+    final request = await _client.openUrl('PATCH', uri);
+    request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $accessToken');
+    request.headers.set(
+      HttpHeaders.contentTypeHeader,
+      'multipart/form-data; boundary=$boundary',
+    );
+
+    void writeField(String name, String value) {
+      request.write('--$boundary\r\n');
+      request.write('Content-Disposition: form-data; name="$name"\r\n\r\n');
+      request.write('$value\r\n');
+    }
+
+    for (final entry in fields.entries) {
+      writeField(entry.key, entry.value);
+    }
+
+    if (file != null) {
+      final fileName = file.path.split(Platform.pathSeparator).last;
+      request.write('--$boundary\r\n');
+      request.write(
+        'Content-Disposition: form-data; name="$fileField"; filename="$fileName"\r\n',
+      );
+      request.write('Content-Type: ${_imageContentType(fileName)}\r\n\r\n');
+      await request.addStream(file.openRead());
+      request.write('\r\n');
+    }
+
+    request.write('--$boundary--\r\n');
     final response = await request.close();
     final rawBody = await response.transform(utf8.decoder).join();
     final decoded = _decodeJson(rawBody);
@@ -309,10 +471,50 @@ class AuthApiService {
     return decoded;
   }
 
+  Future<Map<String, dynamic>> _sendJson({
+    required String method,
+    required String path,
+    required Map<String, dynamic> body,
+    String? accessToken,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+    final request = await _client.openUrl(method, uri);
+    request.headers.contentType = ContentType.json;
+    if (accessToken != null) {
+      request.headers.set(
+        HttpHeaders.authorizationHeader,
+        'Bearer $accessToken',
+      );
+    }
+    request.write(jsonEncode(body));
+    final response = await request.close();
+    final rawBody = await response.transform(utf8.decoder).join();
+    final decoded = _decodeJson(rawBody);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(
+        decoded['error']?.toString() ??
+            decoded['message']?.toString() ??
+            'Server xatosi',
+        statusCode: response.statusCode,
+      );
+    }
+
+    return decoded;
+  }
+
   Map<String, dynamic> _decodeJson(String rawBody) {
     if (rawBody.trim().isEmpty) return <String, dynamic>{};
     final decoded = jsonDecode(rawBody);
     if (decoded is Map<String, dynamic>) return decoded;
     throw const AuthApiException("Server javobi noto'g'ri formatda");
+  }
+
+  String _imageContentType(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    return 'image/jpeg';
   }
 }

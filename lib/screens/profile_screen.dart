@@ -18,9 +18,11 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoggedIn = false;
+  bool _isCheckingSession = true;
   bool _authRouteOpen = false;
   String _name = '';
   String _phone = '';
+  String? _profileImg;
   File? _avatarFile;
   final ImagePicker _picker = ImagePicker();
   final AuthApiService _authApi = AuthApiService();
@@ -33,11 +35,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadSavedSession() async {
     final session = await _authApi.loadSavedSession();
-    if (!mounted || session == null) return;
+    if (!mounted) return;
+    if (session == null) {
+      setState(() => _isCheckingSession = false);
+      return;
+    }
     setState(() {
       _isLoggedIn = true;
+      _isCheckingSession = false;
       _name = session.name;
       _phone = session.phone;
+      _profileImg = session.profileImg;
     });
   }
 
@@ -105,7 +113,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) return;
     setState(() {
       _isLoggedIn = false;
+      _isCheckingSession = false;
       _avatarFile = null;
+      _profileImg = null;
     });
   }
 
@@ -156,9 +166,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return File(file.path);
   }
 
+  ImageProvider? get _avatarProvider {
+    if (_avatarFile != null) return FileImage(_avatarFile!);
+    final imageUrl = _profileImageUrl;
+    if (imageUrl != null) return NetworkImage(imageUrl);
+    return null;
+  }
+
+  String? get _profileImageUrl {
+    final path = _profileImg;
+    if (path == null || path.isEmpty) return null;
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    return '${AuthApiService.baseUrlForFiles}$path';
+  }
+
   void _openEditProfile() {
     final nameCtrl = TextEditingController(text: _name);
-    final phoneCtrl = TextEditingController(text: _phone);
+    File? pickedAvatar;
+    var isSaving = false;
+    String? saveError;
+
     _showFastBottomSheet(
       isScrollControlled: true,
       showDragHandle: true,
@@ -167,30 +194,75 @@ class _ProfileScreenState extends State<ProfileScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              8,
-              16,
-              MediaQuery.of(ctx).viewInsets.bottom + 16,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 4),
-                StatefulBuilder(
-                  builder: (context, setModalState) {
-                    File? localAvatar = _avatarFile;
-                    return Center(
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final localAvatar = pickedAvatar ?? _avatarFile;
+
+            Future<void> saveProfile() async {
+              if (isSaving) return;
+              final nextName = nameCtrl.text.trim().isEmpty
+                  ? _name
+                  : nameCtrl.text.trim();
+
+              setModalState(() {
+                isSaving = true;
+                saveError = null;
+              });
+
+              var saved = false;
+              try {
+                final session = await _authApi.updateProfile(
+                  fullName: nextName,
+                  profileImg: pickedAvatar,
+                );
+                if (!mounted) return;
+                setState(() {
+                  _name = session.name;
+                  _phone = session.phone;
+                  _profileImg = session.profileImg;
+                  if (pickedAvatar != null) _avatarFile = pickedAvatar;
+                });
+                saved = true;
+                if (ctx.mounted) Navigator.of(ctx).pop();
+              } on AuthApiException catch (error) {
+                if (!ctx.mounted) return;
+                setModalState(() => saveError = error.message);
+              } on Object {
+                if (!ctx.mounted) return;
+                setModalState(
+                  () => saveError = 'Server bilan bog‘lanib bo‘lmadi',
+                );
+              } finally {
+                if (!saved && ctx.mounted) {
+                  setModalState(() => isSaving = false);
+                }
+              }
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  MediaQuery.of(ctx).viewInsets.bottom + 16,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 4),
+                    Center(
                       child: GestureDetector(
-                        onTap: () async {
-                          final picked = await _pickAvatarFile();
-                          if (picked == null) return;
-                          setState(() => _avatarFile = picked);
-                          setModalState(() => localAvatar = picked);
-                        },
+                        onTap: isSaving
+                            ? null
+                            : () async {
+                                final picked = await _pickAvatarFile();
+                                if (picked == null) return;
+                                setModalState(() {
+                                  pickedAvatar = picked;
+                                });
+                              },
                         child: CircleAvatar(
                           radius: 32,
                           backgroundColor: const Color(0xFF1F5A50),
@@ -209,60 +281,288 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               : null,
                         ),
                       ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: nameCtrl,
-                  cursorColor: const Color(0xFF1F5A50),
-                  decoration: _inputDecoration('Ism familiya'),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: phoneCtrl,
-                  keyboardType: TextInputType.phone,
-                  cursorColor: const Color(0xFF1F5A50),
-                  decoration: _inputDecoration('Telefon raqam'),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1F5A50),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: nameCtrl,
+                      enabled: !isSaving,
+                      cursorColor: const Color(0xFF1F5A50),
+                      decoration: _inputDecoration('Ism familiya'),
+                    ),
+                    if (saveError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        saveError!,
+                        style: const TextStyle(
+                          color: Colors.redAccent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1F5A50),
+                          disabledBackgroundColor: const Color(
+                            0xFF1F5A50,
+                          ).withValues(alpha: 0.72),
+                          foregroundColor: Colors.white,
+                          disabledForegroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: isSaving ? null : saveProfile,
+                        child: isSaving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              )
+                            : const Text(
+                                'Saqlash',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                       ),
                     ),
-                    onPressed: () {
-                      setState(() {
-                        _name = nameCtrl.text.trim().isEmpty
-                            ? _name
-                            : nameCtrl.text.trim();
-                        _phone = phoneCtrl.text.trim().isEmpty
-                            ? _phone
-                            : phoneCtrl.text.trim();
-                      });
-                      Navigator.of(ctx).pop();
-                    },
-                    child: const Text(
-                      'Saqlash',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
-    );
+    ).whenComplete(() {
+      nameCtrl.dispose();
+    });
+  }
+
+  void _openEditPhone() {
+    final oldPhoneCtrl = TextEditingController(text: _phone);
+    final newPhoneCtrl = TextEditingController(text: _phone);
+    final codeCtrl = TextEditingController();
+    var step = 0;
+    var isSubmitting = false;
+    String? message;
+    String? errorText;
+
+    _showFastBottomSheet(
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            Future<void> requestCode() async {
+              if (isSubmitting) return;
+              final oldPhone = oldPhoneCtrl.text.trim();
+              final newPhone = newPhoneCtrl.text.trim();
+              if (oldPhone.isEmpty) {
+                setModalState(
+                  () => errorText = 'Eski telefon raqamni kiriting',
+                );
+                return;
+              }
+              if (newPhone.isEmpty) {
+                setModalState(
+                  () => errorText = 'Yangi telefon raqamni kiriting',
+                );
+                return;
+              }
+              setModalState(() {
+                isSubmitting = true;
+                message = null;
+                errorText = null;
+              });
+              try {
+                final response = await _authApi.requestPhoneChangeCode(
+                  oldPhone: oldPhone,
+                  newPhone: newPhone,
+                );
+                if (!ctx.mounted) return;
+                setModalState(() {
+                  step = 1;
+                  message = response.smsCode == null
+                      ? response.message
+                      : '${response.message}. Kod: ${response.smsCode}';
+                });
+              } on AuthApiException catch (error) {
+                if (!ctx.mounted) return;
+                setModalState(() => errorText = error.message);
+              } on Object {
+                if (!ctx.mounted) return;
+                setModalState(
+                  () => errorText = 'Server bilan bog‘lanib bo‘lmadi',
+                );
+              } finally {
+                if (ctx.mounted) setModalState(() => isSubmitting = false);
+              }
+            }
+
+            Future<void> verifyCode() async {
+              if (isSubmitting) return;
+              final oldPhone = oldPhoneCtrl.text.trim();
+              final newPhone = newPhoneCtrl.text.trim();
+              final code = codeCtrl.text.trim();
+              if (code.isEmpty) {
+                setModalState(() => errorText = 'SMS kodni kiriting');
+                return;
+              }
+              setModalState(() {
+                isSubmitting = true;
+                errorText = null;
+              });
+              var saved = false;
+              try {
+                final session = await _authApi.verifyPhoneChangeCode(
+                  oldPhone: oldPhone,
+                  newPhone: newPhone,
+                  code: code,
+                );
+                if (!mounted) return;
+                setState(() {
+                  _name = session.name;
+                  _phone = session.phone;
+                  _profileImg = session.profileImg;
+                });
+                saved = true;
+                if (ctx.mounted) Navigator.of(ctx).pop();
+              } on AuthApiException catch (error) {
+                if (!ctx.mounted) return;
+                setModalState(() => errorText = error.message);
+              } on Object {
+                if (!ctx.mounted) return;
+                setModalState(
+                  () => errorText = 'Server bilan bog‘lanib bo‘lmadi',
+                );
+              } finally {
+                if (!saved && ctx.mounted) {
+                  setModalState(() => isSubmitting = false);
+                }
+              }
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  MediaQuery.of(ctx).viewInsets.bottom + 16,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: oldPhoneCtrl,
+                      enabled: !isSubmitting && step == 0,
+                      keyboardType: TextInputType.phone,
+                      cursorColor: const Color(0xFF1F5A50),
+                      decoration: _inputDecoration('Eski telefon raqam'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: newPhoneCtrl,
+                      enabled: !isSubmitting && step == 0,
+                      keyboardType: TextInputType.phone,
+                      cursorColor: const Color(0xFF1F5A50),
+                      decoration: _inputDecoration('Yangi telefon raqam'),
+                    ),
+                    if (step == 1) ...[
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: codeCtrl,
+                        enabled: !isSubmitting,
+                        keyboardType: TextInputType.number,
+                        cursorColor: const Color(0xFF1F5A50),
+                        decoration: _inputDecoration('SMS kod'),
+                      ),
+                    ],
+                    if (message != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        message!,
+                        style: const TextStyle(
+                          color: Color(0xFF1F5A50),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                    if (errorText != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        errorText!,
+                        style: const TextStyle(
+                          color: Colors.redAccent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1F5A50),
+                          disabledBackgroundColor: const Color(
+                            0xFF1F5A50,
+                          ).withValues(alpha: 0.72),
+                          foregroundColor: Colors.white,
+                          disabledForegroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: isSubmitting
+                            ? null
+                            : step == 0
+                            ? requestCode
+                            : verifyCode,
+                        child: isSubmitting
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              )
+                            : Text(step == 0 ? 'Kod olish' : 'Tasdiqlash'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      oldPhoneCtrl.dispose();
+      newPhoneCtrl.dispose();
+      codeCtrl.dispose();
+    });
   }
 
   Widget _buildSignedOutFallback() {
@@ -270,12 +570,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) _openAuthPage();
     });
 
-    return const SizedBox.shrink();
+    return _buildLoadingState();
+  }
+
+  Widget _buildLoadingState() {
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * 0.46,
+      child: const Center(
+        child: SizedBox(
+          width: 32,
+          height: 32,
+          child: CircularProgressIndicator(
+            strokeWidth: 3,
+            color: Color(0xFF1F5A50),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
+
+    if (_isCheckingSession) {
+      return _buildLoadingState();
+    }
 
     if (!_isLoggedIn) {
       return _buildSignedOutFallback();
@@ -304,10 +624,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 CircleAvatar(
                   radius: 30,
                   backgroundColor: const Color(0xFF1F5A50),
-                  backgroundImage: _avatarFile != null
-                      ? FileImage(_avatarFile!)
-                      : null,
-                  child: _avatarFile == null
+                  backgroundImage: _avatarProvider,
+                  child: _avatarProvider == null
                       ? Text(
                           _initials,
                           style: const TextStyle(
@@ -323,6 +641,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      const Text(
+                        'Profil',
+                        style: TextStyle(
+                          color: Color(0xFF8A9A97),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
                       Text(
                         _name,
                         style: const TextStyle(
@@ -331,19 +658,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      SizedBox(height: 4),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: _openEditProfile,
+                  icon: const Icon(Icons.edit, color: primaryGreen, size: 20),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: primaryGreen.withValues(alpha: 0.12)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.phone_rounded, color: primaryGreen, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Telefon raqam',
+                        style: TextStyle(
+                          color: Color(0xFF8A9A97),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
                       Text(
                         _phone,
                         style: const TextStyle(
-                          color: Color(0xFF8A9A97),
-                          fontSize: 12,
+                          color: primaryGreen,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
-                  onPressed: _openEditProfile,
+                  onPressed: _openEditPhone,
                   icon: const Icon(Icons.edit, color: primaryGreen, size: 20),
                 ),
               ],
