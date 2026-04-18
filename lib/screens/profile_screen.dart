@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:hello_flutter_app/screens/admin_panel_screen.dart';
 import 'package:hello_flutter_app/screens/auth_screen.dart';
+import 'package:hello_flutter_app/screens/my_stores_screen.dart';
 import 'package:hello_flutter_app/screens/open_store_screen.dart';
 import 'package:hello_flutter_app/screens/orders_screen.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
@@ -9,8 +11,9 @@ import 'package:image_picker/image_picker.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onAuthCancelled;
+  final VoidCallback? onAuthChanged;
 
-  const ProfileScreen({super.key, this.onAuthCancelled});
+  const ProfileScreen({super.key, this.onAuthCancelled, this.onAuthChanged});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -22,6 +25,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _authRouteOpen = false;
   String _name = '';
   String _phone = '';
+  String _role = 'user';
   String? _profileImg;
   File? _avatarFile;
   final ImagePicker _picker = ImagePicker();
@@ -34,10 +38,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadSavedSession() async {
-    final session = await _authApi.loadSavedSession();
+    final session = await _authApi.refreshSavedSession();
     if (!mounted) return;
     if (session == null) {
-      setState(() => _isCheckingSession = false);
+      setState(() {
+        _isLoggedIn = false;
+        _isCheckingSession = false;
+        _name = '';
+        _phone = '';
+        _role = 'user';
+        _profileImg = null;
+        _avatarFile = null;
+      });
       return;
     }
     setState(() {
@@ -45,6 +57,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _isCheckingSession = false;
       _name = session.name;
       _phone = session.phone;
+      _role = session.role;
       _profileImg = session.profileImg;
     });
   }
@@ -80,6 +93,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return (first + last).toUpperCase();
   }
 
+  bool get _isSeller => _role.toLowerCase() == 'seller';
+
+  bool get _isAdmin => _role.toLowerCase() == 'admin';
+
   InputDecoration _inputDecoration(String label) {
     const primaryGreen = Color(0xFF1F5A50);
     const mutedText = Color(0xFF8A9A97);
@@ -111,11 +128,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _logout() async {
     await _authApi.clearSession();
     if (!mounted) return;
+    _resetLoggedOutState();
+    widget.onAuthChanged?.call();
+  }
+
+  void _resetLoggedOutState() {
     setState(() {
       _isLoggedIn = false;
       _isCheckingSession = false;
+      _name = '';
+      _phone = '';
       _avatarFile = null;
       _profileImg = null;
+      _role = 'user';
     });
   }
 
@@ -135,7 +160,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _isLoggedIn = true;
       _name = result.name;
       _phone = result.phone;
+      _role = result.role;
     });
+    widget.onAuthChanged?.call();
     _showLoginSuccessNotification();
   }
 
@@ -181,11 +208,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _openEditProfile() {
-    final nameCtrl = TextEditingController(text: _name);
-    File? pickedAvatar;
-    var isSaving = false;
-    String? saveError;
-
     _showFastBottomSheet(
       isScrollControlled: true,
       showDragHandle: true,
@@ -193,160 +215,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final localAvatar = pickedAvatar ?? _avatarFile;
-
-            Future<void> saveProfile() async {
-              if (isSaving) return;
-              final nextName = nameCtrl.text.trim().isEmpty
-                  ? _name
-                  : nameCtrl.text.trim();
-
-              setModalState(() {
-                isSaving = true;
-                saveError = null;
-              });
-
-              var saved = false;
-              try {
-                final session = await _authApi.updateProfile(
-                  fullName: nextName,
-                  profileImg: pickedAvatar,
-                );
-                if (!mounted) return;
-                setState(() {
-                  _name = session.name;
-                  _phone = session.phone;
-                  _profileImg = session.profileImg;
-                  if (pickedAvatar != null) _avatarFile = pickedAvatar;
-                });
-                saved = true;
-                if (ctx.mounted) Navigator.of(ctx).pop();
-              } on AuthApiException catch (error) {
-                if (!ctx.mounted) return;
-                setModalState(() => saveError = error.message);
-              } on Object {
-                if (!ctx.mounted) return;
-                setModalState(
-                  () => saveError = 'Server bilan bog‘lanib bo‘lmadi',
-                );
-              } finally {
-                if (!saved && ctx.mounted) {
-                  setModalState(() => isSaving = false);
-                }
-              }
-            }
-
-            return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  8,
-                  16,
-                  MediaQuery.of(ctx).viewInsets.bottom + 16,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 4),
-                    Center(
-                      child: GestureDetector(
-                        onTap: isSaving
-                            ? null
-                            : () async {
-                                final picked = await _pickAvatarFile();
-                                if (picked == null) return;
-                                setModalState(() {
-                                  pickedAvatar = picked;
-                                });
-                              },
-                        child: CircleAvatar(
-                          radius: 32,
-                          backgroundColor: const Color(0xFF1F5A50),
-                          backgroundImage: localAvatar != null
-                              ? FileImage(localAvatar)
-                              : null,
-                          child: localAvatar == null
-                              ? Text(
-                                  _initials,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                )
-                              : null,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: nameCtrl,
-                      enabled: !isSaving,
-                      cursorColor: const Color(0xFF1F5A50),
-                      decoration: _inputDecoration('Ism familiya'),
-                    ),
-                    if (saveError != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        saveError!,
-                        style: const TextStyle(
-                          color: Colors.redAccent,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 44,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1F5A50),
-                          disabledBackgroundColor: const Color(
-                            0xFF1F5A50,
-                          ).withValues(alpha: 0.72),
-                          foregroundColor: Colors.white,
-                          disabledForegroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        onPressed: isSaving ? null : saveProfile,
-                        child: isSaving
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
-                                  ),
-                                ),
-                              )
-                            : const Text(
-                                'Saqlash',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
+      builder: (_) {
+        return _EditProfileSheet(
+          initialName: _name,
+          initials: _initials,
+          currentAvatar: _avatarFile,
+          authApi: _authApi,
+          pickAvatarFile: _pickAvatarFile,
+          onInvalidSession: _resetLoggedOutState,
+          onSaved: (session, pickedAvatar) {
+            if (!mounted) return;
+            setState(() {
+              _name = session.name;
+              _phone = session.phone;
+              _role = session.role;
+              _profileImg = session.profileImg;
+              if (pickedAvatar != null) _avatarFile = pickedAvatar;
+            });
           },
         );
       },
-    ).whenComplete(() {
-      nameCtrl.dispose();
-    });
+    );
   }
 
   void _openEditPhone() {
@@ -403,6 +292,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 });
               } on AuthApiException catch (error) {
                 if (!ctx.mounted) return;
+                if (AuthApiService.isInvalidSessionError(error)) {
+                  Navigator.of(ctx).pop();
+                  _resetLoggedOutState();
+                  return;
+                }
                 setModalState(() => errorText = error.message);
               } on Object {
                 if (!ctx.mounted) return;
@@ -438,12 +332,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 setState(() {
                   _name = session.name;
                   _phone = session.phone;
+                  _role = session.role;
                   _profileImg = session.profileImg;
                 });
                 saved = true;
                 if (ctx.mounted) Navigator.of(ctx).pop();
               } on AuthApiException catch (error) {
                 if (!ctx.mounted) return;
+                if (AuthApiService.isInvalidSessionError(error)) {
+                  Navigator.of(ctx).pop();
+                  _resetLoggedOutState();
+                  return;
+                }
                 setModalState(() => errorText = error.message);
               } on Object {
                 if (!ctx.mounted) return;
@@ -723,16 +623,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
             },
           ),
           const SizedBox(height: 8),
-          _ActionTile(
-            title: "Do'kon ochish",
-            icon: Icons.storefront_rounded,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const OpenStoreScreen()),
-              );
-            },
-          ),
+          if (!_isAdmin)
+            _ActionTile(
+              title: "Do'kon ochish",
+              icon: Icons.storefront_rounded,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const OpenStoreScreen()),
+                );
+              },
+            ),
+          if (_isSeller) ...[
+            const SizedBox(height: 8),
+            _ActionTile(
+              title: "Mening do'konlarim",
+              icon: Icons.store_mall_directory_rounded,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MyStoresScreen()),
+                );
+              },
+            ),
+          ],
+          if (_isAdmin) ...[
+            const SizedBox(height: 8),
+            _ActionTile(
+              title: 'Boshqaruv paneli',
+              icon: Icons.admin_panel_settings_rounded,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AdminPanelScreen()),
+                );
+              },
+            ),
+          ],
           const SizedBox(height: 12),
           SizedBox(
             height: 44,
@@ -754,6 +681,222 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 16),
         ],
+      ),
+    );
+  }
+}
+
+class _EditProfileSheet extends StatefulWidget {
+  final String initialName;
+  final String initials;
+  final File? currentAvatar;
+  final AuthApiService authApi;
+  final Future<File?> Function() pickAvatarFile;
+  final VoidCallback onInvalidSession;
+  final void Function(AuthSession session, File? pickedAvatar) onSaved;
+
+  const _EditProfileSheet({
+    required this.initialName,
+    required this.initials,
+    required this.currentAvatar,
+    required this.authApi,
+    required this.pickAvatarFile,
+    required this.onInvalidSession,
+    required this.onSaved,
+  });
+
+  @override
+  State<_EditProfileSheet> createState() => _EditProfileSheetState();
+}
+
+class _EditProfileSheetState extends State<_EditProfileSheet> {
+  late final TextEditingController _nameCtrl;
+  File? _pickedAvatar;
+  bool _isSaving = false;
+  String? _saveError;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickAvatar() async {
+    if (_isSaving) return;
+    final picked = await widget.pickAvatarFile();
+    if (!mounted || picked == null) return;
+    setState(() => _pickedAvatar = picked);
+  }
+
+  Future<void> _saveProfile() async {
+    if (_isSaving) return;
+    final nextName = _nameCtrl.text.trim().isEmpty
+        ? widget.initialName
+        : _nameCtrl.text.trim();
+
+    setState(() {
+      _isSaving = true;
+      _saveError = null;
+    });
+
+    try {
+      final session = await widget.authApi.updateProfile(
+        fullName: nextName,
+        profileImg: _pickedAvatar,
+      );
+      if (!mounted) return;
+      widget.onSaved(session, _pickedAvatar);
+      Navigator.of(context).pop();
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      if (AuthApiService.isInvalidSessionError(error)) {
+        widget.onInvalidSession();
+        Navigator.of(context).pop();
+        return;
+      }
+      setState(() {
+        _saveError = error.message;
+        _isSaving = false;
+      });
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        _saveError = 'Server bilan bog‘lanib bo‘lmadi';
+        _isSaving = false;
+      });
+    }
+  }
+
+  InputDecoration _inputDecoration(String label) {
+    const primaryGreen = Color(0xFF1F5A50);
+    const mutedText = Color(0xFF8A9A97);
+
+    OutlineInputBorder border(Color color, {double width = 1}) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
+
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: mutedText),
+      floatingLabelStyle: const TextStyle(
+        color: primaryGreen,
+        fontWeight: FontWeight.w700,
+      ),
+      filled: true,
+      fillColor: const Color(0xFFF6F7F8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: border(primaryGreen.withValues(alpha: 0.12)),
+      focusedBorder: border(primaryGreen, width: 1.4),
+      errorBorder: border(Colors.redAccent.withValues(alpha: 0.7)),
+      focusedErrorBorder: border(Colors.redAccent, width: 1.4),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final localAvatar = _pickedAvatar ?? widget.currentAvatar;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          8,
+          16,
+          MediaQuery.viewInsetsOf(context).bottom + 16,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Center(
+              child: GestureDetector(
+                onTap: _isSaving ? null : _pickAvatar,
+                child: CircleAvatar(
+                  radius: 32,
+                  backgroundColor: const Color(0xFF1F5A50),
+                  backgroundImage: localAvatar != null
+                      ? FileImage(localAvatar)
+                      : null,
+                  child: localAvatar == null
+                      ? Text(
+                          widget.initials,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _nameCtrl,
+              enabled: !_isSaving,
+              cursorColor: const Color(0xFF1F5A50),
+              decoration: _inputDecoration('Ism familiya'),
+            ),
+            if (_saveError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _saveError!,
+                style: const TextStyle(
+                  color: Colors.redAccent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1F5A50),
+                  disabledBackgroundColor: const Color(
+                    0xFF1F5A50,
+                  ).withValues(alpha: 0.72),
+                  foregroundColor: Colors.white,
+                  disabledForegroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: _isSaving ? null : _saveProfile,
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      )
+                    : const Text(
+                        'Saqlash',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

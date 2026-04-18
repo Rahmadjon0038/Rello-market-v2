@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hello_flutter_app/models/product.dart';
+import 'package:hello_flutter_app/models/seller.dart';
+import 'package:hello_flutter_app/screens/seller_screen.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/product_api_service.dart';
 import 'package:hello_flutter_app/widgets/product_image.dart';
@@ -115,6 +117,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
     );
+  }
+
+  Future<void> _openSeller(Seller seller) async {
+    if (seller.id.isEmpty) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => SellerScreen(sellerId: seller.id)),
+    );
+    if (!mounted) return;
+    _loadProduct();
   }
 
   @override
@@ -257,6 +268,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             fontWeight: FontWeight.w500,
           ),
         ),
+        if (product.seller != null && product.seller!.id.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          _SellerBlock(
+            seller: product.seller!,
+            onTap: () => _openSeller(product.seller!),
+          ),
+        ],
         const SizedBox(height: 20),
         SizedBox(
           height: 50,
@@ -297,6 +315,88 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       ],
     );
   }
+}
+
+class _SellerBlock extends StatelessWidget {
+  final Seller seller;
+  final VoidCallback onTap;
+
+  const _SellerBlock({required this.seller, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+    final imageUrl = seller.resolvedProfileImg;
+
+    return Material(
+      color: const Color(0xFFE6F4EF),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 26,
+                backgroundColor: Colors.white,
+                backgroundImage: _profileImageProvider(imageUrl),
+                child: imageUrl.isEmpty
+                    ? const Icon(Icons.storefront_rounded, color: primaryGreen)
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      seller.fullName.isEmpty ? 'Sotuvchi' : seller.fullName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: primaryGreen,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if (seller.contact.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        seller.contact,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: primaryGreen.withOpacity(0.72),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: primaryGreen,
+                size: 26,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+ImageProvider? _profileImageProvider(String imageUrl) {
+  if (imageUrl.isEmpty) return null;
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    return NetworkImage(imageUrl);
+  }
+  return AssetImage(imageUrl);
 }
 
 class _InfoChip extends StatelessWidget {

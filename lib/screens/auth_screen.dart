@@ -6,8 +6,13 @@ import 'package:hello_flutter_app/services/auth_api_service.dart';
 class AuthResult {
   final String name;
   final String phone;
+  final String role;
 
-  const AuthResult({required this.name, required this.phone});
+  const AuthResult({
+    required this.name,
+    required this.phone,
+    required this.role,
+  });
 }
 
 class AuthScreen extends StatefulWidget {
@@ -141,7 +146,11 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   AuthResult _resultFromSession(AuthSession session) {
-    return AuthResult(name: session.name, phone: session.phone);
+    return AuthResult(
+      name: session.name,
+      phone: session.phone,
+      role: session.role,
+    );
   }
 
   Future<void> _login() async {
@@ -925,6 +934,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     return '${response.message}.$codeText$expiresText';
   }
 
+  AuthResult _resultFromSession(AuthSession session) {
+    return AuthResult(
+      name: session.name,
+      phone: session.phone,
+      role: session.role,
+    );
+  }
+
   void _setMessage({String? message, String? error}) {
     setState(() {
       _message = message;
@@ -987,9 +1004,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         newPassword: newPassword,
       );
       if (!mounted) return;
-      Navigator.of(
-        context,
-      ).pop(AuthResult(name: session.name, phone: session.phone));
+      Navigator.of(context).pop(_resultFromSession(session));
     } on AuthApiException catch (error) {
       if (!mounted) return;
       _setMessage(error: error.message);

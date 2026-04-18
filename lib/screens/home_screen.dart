@@ -5,6 +5,8 @@ import 'package:hello_flutter_app/screens/favorites_screen.dart';
 import 'package:hello_flutter_app/screens/cart_screen.dart';
 import 'package:hello_flutter_app/screens/profile_screen.dart';
 import 'package:hello_flutter_app/screens/settings_screen.dart';
+import 'package:hello_flutter_app/services/auth_api_service.dart';
+import 'package:hello_flutter_app/services/product_api_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,14 +16,36 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final ProductApiService _productApi = ProductApiService();
   int _currentIndex = 0;
   int _lastNonProfileIndex = 0;
+  ProductSummary _summary = const ProductSummary.empty();
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshSummary();
+  }
+
+  Future<void> _refreshSummary() async {
+    try {
+      final summary = await _productApi.getProductSummary();
+      if (!mounted) return;
+      setState(() => _summary = summary);
+    } on AuthApiException {
+      if (!mounted) return;
+      setState(() => _summary = const ProductSummary.empty());
+    } on Object {
+      // Keep the last visible count when the network is temporarily unavailable.
+    }
+  }
 
   void _setTab(int index) {
     setState(() {
       if (index != 3) _lastNonProfileIndex = index;
       _currentIndex = index;
     });
+    _refreshSummary();
   }
 
   void _returnFromCancelledAuth() {
@@ -37,9 +61,13 @@ class _HomeScreenState extends State<HomeScreen> {
         onGoHome: () {
           _setTab(0);
         },
+        onSummaryChanged: _refreshSummary,
       ),
-      const CartScreen(),
-      ProfileScreen(onAuthCancelled: _returnFromCancelledAuth),
+      CartScreen(onSummaryChanged: _refreshSummary),
+      ProfileScreen(
+        onAuthCancelled: _returnFromCancelledAuth,
+        onAuthChanged: _refreshSummary,
+      ),
       const SettingsScreen(),
     ];
 
@@ -47,6 +75,8 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: Colors.white,
       bottomNavigationBar: HomeBottomBar(
         currentIndex: _currentIndex,
+        favoriteCount: _summary.favoriteCount,
+        cartCount: _summary.cartTotalQty,
         onTap: _setTab,
       ),
       body: SafeArea(
@@ -56,6 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
             HomeHeader(
               showContent: _currentIndex == 0,
               showSearch: _currentIndex == 0,
+              onSummaryChanged: _refreshSummary,
             ),
             if (_currentIndex != 0) ...[
               const SizedBox(height: 16),

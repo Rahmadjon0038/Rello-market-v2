@@ -4,7 +4,46 @@ import 'dart:io';
 import 'package:hello_flutter_app/config/api_config.dart';
 import 'package:hello_flutter_app/models/category.dart';
 import 'package:hello_flutter_app/models/product.dart';
+import 'package:hello_flutter_app/models/seller.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
+
+class SellerProductsResponse {
+  final Seller seller;
+  final List<Product> products;
+
+  const SellerProductsResponse({required this.seller, required this.products});
+}
+
+class ProductSummary {
+  final int favoriteCount;
+  final int cartItemCount;
+  final int cartTotalQty;
+
+  const ProductSummary({
+    required this.favoriteCount,
+    required this.cartItemCount,
+    required this.cartTotalQty,
+  });
+
+  const ProductSummary.empty()
+    : favoriteCount = 0,
+      cartItemCount = 0,
+      cartTotalQty = 0;
+
+  factory ProductSummary.fromJson(Map<String, dynamic> json) {
+    return ProductSummary(
+      favoriteCount: _summaryIntFromJson(json['favoriteCount']),
+      cartItemCount: _summaryIntFromJson(json['cartItemCount']),
+      cartTotalQty: _summaryIntFromJson(json['cartTotalQty']),
+    );
+  }
+
+  static int _summaryIntFromJson(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+}
 
 class ProductApiService {
   ProductApiService({HttpClient? client, AuthApiService? authApi})
@@ -25,6 +64,21 @@ class ProductApiService {
         .whereType<Map<String, dynamic>>()
         .map(Product.fromJson)
         .toList();
+  }
+
+  Future<ProductSummary> getProductSummary() async {
+    final data = await _send('GET', '/me/product-summary', authRequired: true);
+    return ProductSummary.fromJson(data);
+  }
+
+  Future<List<Product>> getFavoriteProducts() async {
+    final data = await _send('GET', '/me/favorites', authRequired: true);
+    return _productsFromData(data);
+  }
+
+  Future<List<Product>> getCartProducts() async {
+    final data = await _send('GET', '/me/cart', authRequired: true);
+    return _productsFromData(data);
   }
 
   Future<List<Product>> getCarousel() async {
@@ -50,6 +104,25 @@ class ProductApiService {
   Future<Product> getProduct(String id) async {
     final data = await _send('GET', '/products/$id');
     return Product.fromJson(data);
+  }
+
+  Future<SellerProductsResponse> getSellerProducts(String sellerId) async {
+    final data = await _send('GET', '/sellers/$sellerId/products');
+    final rawSeller = data['seller'];
+    if (rawSeller is! Map<String, dynamic>) {
+      throw const AuthApiException("Sotuvchi ma'lumoti topilmadi");
+    }
+    final rawProducts = data['data'];
+    final products = rawProducts is List
+        ? rawProducts
+              .whereType<Map<String, dynamic>>()
+              .map(Product.fromJson)
+              .toList()
+        : <Product>[];
+    return SellerProductsResponse(
+      seller: Seller.fromJson(rawSeller),
+      products: products,
+    );
   }
 
   Future<Product> createProduct(Map<String, dynamic> body) async {
@@ -149,6 +222,15 @@ class ProductApiService {
     return _send('DELETE', '/products/$id/cart', authRequired: true);
   }
 
+  List<Product> _productsFromData(Map<String, dynamic> data) {
+    final rawProducts = data['data'];
+    if (rawProducts is! List) return const [];
+    return rawProducts
+        .whereType<Map<String, dynamic>>()
+        .map(Product.fromJson)
+        .toList();
+  }
+
   Future<Map<String, dynamic>> _send(
     String method,
     String path, {
@@ -176,12 +258,16 @@ class ProductApiService {
     final decoded = _decodeJson(rawBody);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw AuthApiException(
+      final exception = AuthApiException(
         decoded['error']?.toString() ??
             decoded['message']?.toString() ??
             'Server xatosi',
         statusCode: response.statusCode,
       );
+      if (AuthApiService.isInvalidSessionError(exception)) {
+        await _authApi.clearSession();
+      }
+      throw exception;
     }
 
     return decoded;

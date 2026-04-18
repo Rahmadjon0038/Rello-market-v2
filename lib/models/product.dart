@@ -1,5 +1,6 @@
 import 'package:hello_flutter_app/config/api_config.dart';
 import 'package:hello_flutter_app/models/category.dart';
+import 'package:hello_flutter_app/models/seller.dart';
 
 class Product {
   final String id;
@@ -18,6 +19,7 @@ class Product {
   final bool isCart;
   final int cartQty;
   final List<String> images;
+  final Seller? seller;
 
   const Product({
     required this.id,
@@ -36,6 +38,7 @@ class Product {
     required this.isCart,
     required this.cartQty,
     required this.images,
+    required this.seller,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -55,6 +58,10 @@ class Product {
             name: rawCategory,
             icon: '',
           )
+        : null;
+    final rawSeller = json['seller'];
+    final seller = rawSeller is Map<String, dynamic>
+        ? Seller.fromJson(rawSeller)
         : null;
 
     return Product(
@@ -76,6 +83,7 @@ class Product {
       isCart: json['isCart'] is bool ? json['isCart'] as bool : false,
       cartQty: _intFromJson(json['cartQty']),
       images: images.isEmpty ? [imagePath] : images,
+      seller: seller,
     );
   }
 
@@ -85,6 +93,7 @@ class Product {
     int? cartQty,
     int? qty,
     bool? selected,
+    Seller? seller,
   }) {
     return Product(
       id: id,
@@ -103,6 +112,7 @@ class Product {
       isCart: isCart ?? this.isCart,
       cartQty: cartQty ?? this.cartQty,
       images: images,
+      seller: seller ?? this.seller,
     );
   }
 

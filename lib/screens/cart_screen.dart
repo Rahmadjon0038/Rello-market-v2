@@ -10,7 +10,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 class CartScreen extends StatefulWidget {
-  const CartScreen({super.key});
+  final VoidCallback? onSummaryChanged;
+
+  const CartScreen({super.key, this.onSummaryChanged});
 
   @override
   State<CartScreen> createState() => _CartScreenState();
@@ -39,16 +41,12 @@ class _CartScreenState extends State<CartScreen> {
       _cartError = null;
     });
     try {
-      final products = await _productApi.getProducts();
+      final products = await _productApi.getCartProducts();
       if (!mounted) return;
       setState(() {
         _items
           ..clear()
-          ..addAll(
-            products
-                .where((product) => product.isCart)
-                .map(_CartItem.fromProduct),
-          );
+          ..addAll(products.map(_CartItem.fromProduct));
         _isLoadingCart = false;
       });
     } on AuthApiException catch (error) {
@@ -170,6 +168,7 @@ class _CartScreenState extends State<CartScreen> {
     });
     try {
       final serverQty = await _productApi.addToCart(id, qty: normalized);
+      widget.onSummaryChanged?.call();
       if (!mounted) return;
       setState(() {
         final currentIdx = _items.indexWhere((e) => e.id == id);
@@ -196,6 +195,7 @@ class _CartScreenState extends State<CartScreen> {
     });
     try {
       await _productApi.removeFromCart(id);
+      widget.onSummaryChanged?.call();
     } on Object {
       if (!mounted) return;
       setState(() => _items.insert(idx, removed));
@@ -212,6 +212,7 @@ class _CartScreenState extends State<CartScreen> {
     final item = _items.firstWhere((e) => e.id == id);
     try {
       await _productApi.addToCart(id, qty: item.qty, selected: item.selected);
+      widget.onSummaryChanged?.call();
     } on Object {
       if (!mounted) return;
       setState(() {

@@ -88,6 +88,10 @@ class AuthApiService {
 
   static String get baseUrlForFiles => ApiConfig.baseUrl;
 
+  static bool isInvalidSessionError(AuthApiException error) {
+    return _isInvalidSessionResponse(error.statusCode, error.message);
+  }
+
   static const _accessTokenKey = 'auth_access_token';
   static const _refreshTokenKey = 'auth_refresh_token';
   static const _nameKey = 'auth_name';
@@ -269,6 +273,26 @@ class AuthApiService {
     );
   }
 
+  Future<AuthSession?> refreshSavedSession() async {
+    final savedSession = await loadSavedSession();
+    if (savedSession == null) return null;
+
+    try {
+      final data = await _get('/me', accessToken: savedSession.accessToken);
+      final session = _sessionFromProfileJson(data, fallback: savedSession);
+      await saveSession(session);
+      return session;
+    } on AuthApiException catch (error) {
+      if (isInvalidSessionError(error)) {
+        await clearSession();
+        return null;
+      }
+      return savedSession;
+    } on Object {
+      return savedSession;
+    }
+  }
+
   Future<void> saveSession(AuthSession session) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_accessTokenKey, session.accessToken);
@@ -437,12 +461,14 @@ class AuthApiService {
     final decoded = _decodeJson(rawBody);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw AuthApiException(
+      final exception = AuthApiException(
         decoded['error']?.toString() ??
             decoded['message']?.toString() ??
             'Server xatosi',
         statusCode: response.statusCode,
       );
+      await _clearSessionIfInvalid(exception);
+      throw exception;
     }
 
     return decoded;
@@ -460,12 +486,14 @@ class AuthApiService {
     final decoded = _decodeJson(rawBody);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw AuthApiException(
+      final exception = AuthApiException(
         decoded['error']?.toString() ??
             decoded['message']?.toString() ??
             'Server xatosi',
         statusCode: response.statusCode,
       );
+      await _clearSessionIfInvalid(exception);
+      throw exception;
     }
 
     return decoded;
@@ -492,12 +520,14 @@ class AuthApiService {
     final decoded = _decodeJson(rawBody);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw AuthApiException(
+      final exception = AuthApiException(
         decoded['error']?.toString() ??
             decoded['message']?.toString() ??
             'Server xatosi',
         statusCode: response.statusCode,
       );
+      await _clearSessionIfInvalid(exception);
+      throw exception;
     }
 
     return decoded;
@@ -516,5 +546,18 @@ class AuthApiService {
     if (lower.endsWith('.webp')) return 'image/webp';
     if (lower.endsWith('.gif')) return 'image/gif';
     return 'image/jpeg';
+  }
+
+  Future<void> _clearSessionIfInvalid(AuthApiException error) async {
+    if (isInvalidSessionError(error)) await clearSession();
+  }
+
+  static bool _isInvalidSessionResponse(int? statusCode, String message) {
+    final normalized = message.toLowerCase();
+    return statusCode == 401 ||
+        statusCode == 403 ||
+        normalized.contains('user topilmadi') ||
+        normalized.contains('foydalanuvchi topilmadi') ||
+        normalized.contains('sotuvchi topilmadi');
   }
 }

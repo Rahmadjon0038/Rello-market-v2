@@ -5,6 +5,6 @@ class ApiConfig {
 
   static String get baseUrl {
     if (_configuredBaseUrl.isNotEmpty) return _configuredBaseUrl;
-    return 'http://127.0.0.1:3000';
+    return 'http://localhost:3000';
   }
 }

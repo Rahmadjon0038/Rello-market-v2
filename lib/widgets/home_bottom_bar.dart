@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 class HomeBottomBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
+  final int favoriteCount;
+  final int cartCount;
 
   const HomeBottomBar({
     super.key,
     required this.currentIndex,
     required this.onTap,
+    this.favoriteCount = 0,
+    this.cartCount = 0,
   });
 
   @override
@@ -48,9 +52,14 @@ class HomeBottomBar extends StatelessWidget {
                 label: 'Sevimlilar',
                 color: accent,
                 active: currentIndex == 1,
+                badgeCount: favoriteCount,
                 onTap: () => onTap(1),
               ),
-              _CartItem(active: currentIndex == 2, onTap: () => onTap(2)),
+              _CartItem(
+                active: currentIndex == 2,
+                badgeCount: cartCount,
+                onTap: () => onTap(2),
+              ),
               _BarItem(
                 icon: Icons.person_rounded,
                 label: 'Profil',
@@ -78,6 +87,7 @@ class _BarItem extends StatelessWidget {
   final String label;
   final Color color;
   final bool active;
+  final int badgeCount;
   final VoidCallback onTap;
 
   const _BarItem({
@@ -85,6 +95,7 @@ class _BarItem extends StatelessWidget {
     required this.label,
     required this.color,
     required this.active,
+    this.badgeCount = 0,
     required this.onTap,
   });
 
@@ -105,7 +116,7 @@ class _BarItem extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, color: color, size: 24),
+                _IconWithBadge(icon: icon, color: color, count: badgeCount),
                 const SizedBox(height: 5),
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
@@ -127,9 +138,14 @@ class _BarItem extends StatelessWidget {
 
 class _CartItem extends StatelessWidget {
   final bool active;
+  final int badgeCount;
   final VoidCallback onTap;
 
-  const _CartItem({required this.active, required this.onTap});
+  const _CartItem({
+    required this.active,
+    required this.badgeCount,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -149,36 +165,10 @@ class _CartItem extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    const Icon(
-                      Icons.shopping_cart_rounded,
-                      color: accent,
-                      size: 24,
-                    ),
-                    Positioned(
-                      right: -7,
-                      top: -7,
-                      child: Container(
-                        width: 16,
-                        height: 16,
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text(
-                          '1',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                _IconWithBadge(
+                  icon: Icons.shopping_cart_rounded,
+                  color: accent,
+                  count: badgeCount,
                 ),
                 const SizedBox(height: 5),
                 AnimatedContainer(
@@ -195,6 +185,53 @@ class _CartItem extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _IconWithBadge extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final int count;
+
+  const _IconWithBadge({
+    required this.icon,
+    required this.color,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count > 99 ? '99+' : count.toString();
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(icon, color: color, size: 24),
+        if (count > 0)
+          Positioned(
+            right: -9,
+            top: -8,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 16),
+              height: 16,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.all(Radius.circular(8)),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

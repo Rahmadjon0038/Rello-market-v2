@@ -7,8 +7,13 @@ import 'package:hello_flutter_app/widgets/product_image.dart';
 
 class FavoritesScreen extends StatefulWidget {
   final VoidCallback onGoHome;
+  final VoidCallback? onSummaryChanged;
 
-  const FavoritesScreen({super.key, required this.onGoHome});
+  const FavoritesScreen({
+    super.key,
+    required this.onGoHome,
+    this.onSummaryChanged,
+  });
 
   @override
   State<FavoritesScreen> createState() => _FavoritesScreenState();
@@ -32,10 +37,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       _error = null;
     });
     try {
-      final products = await _productApi.getProducts();
+      final products = await _productApi.getFavoriteProducts();
       if (!mounted) return;
       setState(() {
-        _products = products.where((product) => product.isLiked).toList();
+        _products = products;
         _isLoading = false;
       });
     } on Object {
@@ -53,6 +58,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     setState(() => _products.removeAt(index));
     try {
       await _productApi.unlikeProduct(product.id);
+      widget.onSummaryChanged?.call();
     } on AuthApiException catch (error) {
       if (!mounted) return;
       setState(() => _products.insert(index, product));
@@ -68,6 +74,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     final qty = product.cartQty > 0 ? product.cartQty + 1 : 1;
     try {
       await _productApi.addToCart(product.id, qty: qty);
+      widget.onSummaryChanged?.call();
       _showSnack('Mahsulot savatchaga qo‘shildi');
     } on AuthApiException catch (error) {
       _showSnack(error.message);
