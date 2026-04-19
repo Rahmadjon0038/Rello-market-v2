@@ -1,7 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hello_flutter_app/models/seller_application.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/store_api_service.dart';
+import 'package:image_picker/image_picker.dart';
+
+const _primaryGreen = Color(0xFF1F5A50);
+const _ink = Color(0xFF1F2933);
+const _muted = Color(0xFF6B7280);
+const _line = Color(0xFFE5E7EB);
+const _surface = Color(0xFFF8FAF9);
 
 class OpenStoreScreen extends StatefulWidget {
   const OpenStoreScreen({super.key});
@@ -12,17 +22,38 @@ class OpenStoreScreen extends StatefulWidget {
 
 class _OpenStoreScreenState extends State<OpenStoreScreen> {
   final StoreApiService _storeApi = StoreApiService();
-  final TextEditingController _firstNameCtrl = TextEditingController();
-  final TextEditingController _lastNameCtrl = TextEditingController();
-  final TextEditingController _phoneCtrl = TextEditingController();
+  final TextEditingController _fullNameCtrl = TextEditingController();
+  final TextEditingController _birthDateCtrl = TextEditingController();
+  final TextEditingController _primaryPhoneCtrl = TextEditingController();
+  final TextEditingController _additionalPhoneCtrl = TextEditingController();
+  final TextEditingController _emailCtrl = TextEditingController();
+  final TextEditingController _livingAddressCtrl = TextEditingController();
+  final TextEditingController _passportSeriesNumberCtrl =
+      TextEditingController();
+  final TextEditingController _passportIssuedByCtrl = TextEditingController();
+  final TextEditingController _passportIssuedDateCtrl = TextEditingController();
+  final TextEditingController _jshshirCtrl = TextEditingController();
   final TextEditingController _storeNameCtrl = TextEditingController();
-  final TextEditingController _purposeCtrl = TextEditingController();
-  final TextEditingController _productsInfoCtrl = TextEditingController();
-  final TextEditingController _addressCtrl = TextEditingController();
+  final TextEditingController _activityTypeCtrl = TextEditingController();
+  final TextEditingController _storeDescriptionCtrl = TextEditingController();
+  final TextEditingController _storeAddressCtrl = TextEditingController();
+  final TextEditingController _storeMapLocationCtrl = TextEditingController();
+  final TextEditingController _workingHoursCtrl = TextEditingController();
+  final TextEditingController _deliveryAreaCtrl = TextEditingController();
+  final TextEditingController _deliveryPriceCtrl = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
 
   SellerApplication? _application;
+  File? _storeLogoFile;
+  String _storeLogoPath = '';
+  List<File> _storeBannerImageFiles = [];
+  List<String> _storeBannerImagePaths = [];
+  String _gender = '';
+  String _storeType = 'online';
+  bool _hasDelivery = false;
   bool _isLoading = true;
   bool _isSubmitting = false;
+  bool _isFormOpen = false;
   String? _error;
   String? _message;
 
@@ -34,13 +65,24 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
 
   @override
   void dispose() {
-    _firstNameCtrl.dispose();
-    _lastNameCtrl.dispose();
-    _phoneCtrl.dispose();
+    _fullNameCtrl.dispose();
+    _birthDateCtrl.dispose();
+    _primaryPhoneCtrl.dispose();
+    _additionalPhoneCtrl.dispose();
+    _emailCtrl.dispose();
+    _livingAddressCtrl.dispose();
+    _passportSeriesNumberCtrl.dispose();
+    _passportIssuedByCtrl.dispose();
+    _passportIssuedDateCtrl.dispose();
+    _jshshirCtrl.dispose();
     _storeNameCtrl.dispose();
-    _purposeCtrl.dispose();
-    _productsInfoCtrl.dispose();
-    _addressCtrl.dispose();
+    _activityTypeCtrl.dispose();
+    _storeDescriptionCtrl.dispose();
+    _storeAddressCtrl.dispose();
+    _storeMapLocationCtrl.dispose();
+    _workingHoursCtrl.dispose();
+    _deliveryAreaCtrl.dispose();
+    _deliveryPriceCtrl.dispose();
     super.dispose();
   }
 
@@ -54,6 +96,12 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
       if (!mounted) return;
       setState(() {
         _application = application;
+        if (application?.status == 'rejected') {
+          _fillForm(application!);
+        } else {
+          _clearForm();
+        }
+        _isFormOpen = false;
         _isLoading = false;
       });
     } on AuthApiException catch (error) {
@@ -74,21 +122,37 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
   Future<void> _submitApplication() async {
     if (_isSubmitting) return;
     final input = SellerApplicationCreateInput(
-      firstName: _firstNameCtrl.text.trim(),
-      lastName: _lastNameCtrl.text.trim(),
-      phone: _phoneCtrl.text.trim(),
+      fullName: _fullNameCtrl.text.trim(),
+      birthDate: _birthDateCtrl.text.trim(),
+      gender: _gender,
+      primaryPhone: _compactUzPhone(_primaryPhoneCtrl.text),
+      additionalPhone: _additionalPhoneCtrl.text.trim().isEmpty
+          ? ''
+          : _compactUzPhone(_additionalPhoneCtrl.text),
+      email: _emailCtrl.text.trim(),
+      livingAddress: _livingAddressCtrl.text.trim(),
+      passportSeriesNumber: _passportSeriesNumberCtrl.text.trim(),
+      passportIssuedBy: _passportIssuedByCtrl.text.trim(),
+      passportIssuedDate: _passportIssuedDateCtrl.text.trim(),
+      jshshir: _jshshirCtrl.text.trim(),
       storeName: _storeNameCtrl.text.trim(),
-      purpose: _purposeCtrl.text.trim(),
-      productsInfo: _productsInfoCtrl.text.trim(),
-      address: _addressCtrl.text.trim(),
+      storeType: _storeType,
+      activityType: _activityTypeCtrl.text.trim(),
+      storeDescription: _storeDescriptionCtrl.text.trim(),
+      storeAddress: _storeAddressCtrl.text.trim(),
+      storeMapLocation: _storeMapLocationCtrl.text.trim(),
+      workingHours: _workingHoursCtrl.text.trim(),
+      hasDelivery: _hasDelivery,
+      deliveryArea: _deliveryAreaCtrl.text.trim(),
+      deliveryPrice: _hasDelivery
+          ? num.tryParse(_deliveryPriceCtrl.text.trim()) ?? -1
+          : 0,
+      storeLogoFile: _storeLogoFile,
+      storeBannerImageFiles: _storeBannerImageFiles,
     );
-    if (input.firstName.isEmpty ||
-        input.lastName.isEmpty ||
-        input.phone.isEmpty ||
-        input.purpose.isEmpty ||
-        input.productsInfo.isEmpty ||
-        input.address.isEmpty) {
-      setState(() => _error = 'Majburiy maydonlarni to‘ldiring');
+    final validationError = _validateInput(input);
+    if (validationError != null) {
+      setState(() => _error = validationError);
       return;
     }
 
@@ -105,6 +169,8 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
         _application = application;
         _message = 'Ariza yuborildi. Natijasini tez orada olasiz';
         _isSubmitting = false;
+        _isFormOpen = false;
+        _clearForm();
       });
     } on AuthApiException catch (error) {
       if (!mounted) return;
@@ -121,10 +187,194 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
     }
   }
 
-  InputDecoration _inputDecoration(String label) {
-    const primaryGreen = Color(0xFF1F5A50);
-    const mutedText = Color(0xFF8A9A97);
+  void _fillForm(SellerApplication application) {
+    _fullNameCtrl.text = application.fullName;
+    _birthDateCtrl.text = application.birthDate;
+    _gender = application.gender;
+    _primaryPhoneCtrl.text = application.primaryPhone;
+    _formatPhoneController(_primaryPhoneCtrl);
+    _additionalPhoneCtrl.text = application.additionalPhone;
+    _formatPhoneController(_additionalPhoneCtrl);
+    _emailCtrl.text = application.email;
+    _livingAddressCtrl.text = application.livingAddress;
+    _passportSeriesNumberCtrl.text = application.passportSeriesNumber;
+    _passportIssuedByCtrl.text = application.passportIssuedBy;
+    _passportIssuedDateCtrl.text = application.passportIssuedDate;
+    _jshshirCtrl.text = application.jshshir;
+    _storeNameCtrl.text = application.storeName;
+    _storeType = _normalizeStoreType(application.storeType);
+    _activityTypeCtrl.text = application.activityType;
+    _storeDescriptionCtrl.text = application.storeDescription;
+    _storeAddressCtrl.text = application.storeAddress;
+    _storeMapLocationCtrl.text = application.storeMapLocation;
+    _workingHoursCtrl.text = application.workingHours;
+    _hasDelivery = application.hasDelivery;
+    _deliveryAreaCtrl.text = application.deliveryArea;
+    _deliveryPriceCtrl.text = application.deliveryPrice == 0
+        ? ''
+        : application.deliveryPrice.toString();
+    _storeLogoPath = application.storeLogo;
+    _storeLogoFile = null;
+    _storeBannerImagePaths = application.storeBannerImages;
+    _storeBannerImageFiles = [];
+  }
 
+  void _clearForm() {
+    _fullNameCtrl.clear();
+    _birthDateCtrl.clear();
+    _primaryPhoneCtrl.clear();
+    _additionalPhoneCtrl.clear();
+    _emailCtrl.clear();
+    _livingAddressCtrl.clear();
+    _passportSeriesNumberCtrl.clear();
+    _passportIssuedByCtrl.clear();
+    _passportIssuedDateCtrl.clear();
+    _jshshirCtrl.clear();
+    _storeNameCtrl.clear();
+    _activityTypeCtrl.clear();
+    _storeDescriptionCtrl.clear();
+    _storeAddressCtrl.clear();
+    _storeMapLocationCtrl.clear();
+    _workingHoursCtrl.clear();
+    _deliveryAreaCtrl.clear();
+    _deliveryPriceCtrl.clear();
+    _storeLogoPath = '';
+    _storeLogoFile = null;
+    _storeBannerImagePaths = [];
+    _storeBannerImageFiles = [];
+    _gender = '';
+    _storeType = 'online';
+    _hasDelivery = false;
+  }
+
+  String? _validateInput(SellerApplicationCreateInput input) {
+    final missingFields = <String>[
+      if (input.fullName.isEmpty) 'Ism familiya',
+      if (input.birthDate.isEmpty) 'Tug‘ilgan sana',
+      if (input.gender.isEmpty) 'Jinsi',
+      if (input.primaryPhone.isEmpty) 'Asosiy telefon',
+      if (input.email.isEmpty) 'Email',
+      if (input.livingAddress.isEmpty) 'Yashash manzili',
+      if (input.passportSeriesNumber.isEmpty) 'Pasport seriya raqami',
+      if (input.jshshir.isEmpty) 'JSHSHIR',
+      if (input.passportIssuedBy.isEmpty) 'Pasport kim tomonidan berilgan',
+      if (input.passportIssuedDate.isEmpty) 'Pasport berilgan sana',
+      if (input.storeName.isEmpty) "Do'kon nomi",
+      if (input.storeType.isEmpty) "Do'kon turi",
+      if (input.activityType.isEmpty) "Faoliyat yo'nalishi",
+      if (input.storeDescription.isEmpty) "Do'kon tavsifi",
+      if (input.storeMapLocation.isEmpty) 'Google Map link yoki koordinata',
+      if (input.workingHours.isEmpty) 'Ish vaqti',
+      if (input.storeLogoFile == null) "Do'kon rasmi/logo",
+    ];
+
+    if (missingFields.isNotEmpty) {
+      return 'Quyidagilarni to‘ldiring: ${missingFields.join(', ')}';
+    }
+
+    if (!_isDate(input.birthDate) || !_isDate(input.passportIssuedDate)) {
+      return 'Sanani YYYY-MM-DD formatida kiriting';
+    }
+
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(input.email)) {
+      return "Email noto'g'ri formatda";
+    }
+
+    if (!RegExp(r'^[A-Z]{2}\d{7}$').hasMatch(input.passportSeriesNumber)) {
+      return 'Pasport seriya raqami AD2467890 formatida bo‘lishi kerak';
+    }
+
+    if (!RegExp(r'^\d{14}$').hasMatch(input.jshshir)) {
+      return 'JSHSHIR 14 ta raqamdan iborat bo‘lishi kerak';
+    }
+
+    if (!RegExp(r'^\+998\d{9}$').hasMatch(input.primaryPhone)) {
+      return 'Asosiy telefon +998 90-123-45-67 formatida bo‘lishi kerak';
+    }
+
+    if (input.additionalPhone.isNotEmpty &&
+        !RegExp(r'^\+998\d{9}$').hasMatch(input.additionalPhone)) {
+      return 'Qo‘shimcha telefon +998 90-123-45-67 formatida bo‘lishi kerak';
+    }
+
+    if (!['online', 'offline', 'both'].contains(input.storeType)) {
+      return "Do'kon turi online, offline yoki both bo‘lishi kerak";
+    }
+
+    if ((input.storeType == 'offline' || input.storeType == 'both') &&
+        input.storeAddress.isEmpty) {
+      return "Offline do'kon uchun manzil majburiy";
+    }
+
+    if (input.hasDelivery) {
+      if (input.deliveryArea.isEmpty ||
+          _deliveryPriceCtrl.text.trim().isEmpty) {
+        return 'Yetkazib berish hududi va narxini kiriting';
+      }
+
+      if (input.deliveryPrice < 0) {
+        return 'Yetkazib berish narxi 0 yoki undan katta bo‘lishi kerak';
+      }
+    }
+
+    return null;
+  }
+
+  String _normalizeStoreType(String value) {
+    return switch (value) {
+      'offline' => 'offline',
+      'both' || 'ikkalasi' => 'both',
+      _ => 'online',
+    };
+  }
+
+  bool _isDate(String value) {
+    if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) return false;
+    final parts = value.split('-').map(int.parse).toList();
+    final date = DateTime(parts[0], parts[1], parts[2]);
+    return date.year == parts[0] &&
+        date.month == parts[1] &&
+        date.day == parts[2];
+  }
+
+  String _compactUzPhone(String value) {
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    final local = digits.startsWith('998') ? digits.substring(3) : digits;
+    return '+998${local.length > 9 ? local.substring(0, 9) : local}';
+  }
+
+  void _formatPhoneController(TextEditingController controller) {
+    final text = _UzPhoneFormatter.formatText(controller.text);
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  Future<void> _pickStoreLogo() async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _storeLogoFile = File(picked.path);
+      _storeLogoPath = '';
+      _error = null;
+    });
+  }
+
+  Future<void> _pickStoreBannerImages() async {
+    final picked = await _picker.pickMultiImage(imageQuality: 85);
+    if (picked.isEmpty || !mounted) return;
+    setState(() {
+      _storeBannerImageFiles = picked.map((item) => File(item.path)).toList();
+      _storeBannerImagePaths = [];
+      _error = null;
+    });
+  }
+
+  InputDecoration _inputDecoration(String label) {
     OutlineInputBorder border(Color color, {double width = 1}) {
       return OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -135,21 +385,21 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
     return InputDecoration(
       labelText: label,
       labelStyle: const TextStyle(
-        color: mutedText,
+        color: _muted,
         fontSize: 14,
         fontWeight: FontWeight.w600,
       ),
       floatingLabelStyle: const TextStyle(
-        color: primaryGreen,
+        color: _ink,
         fontSize: 13,
         fontWeight: FontWeight.w800,
       ),
       filled: true,
-      fillColor: const Color(0xFFF6F7F8),
+      fillColor: _surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      enabledBorder: border(primaryGreen.withValues(alpha: 0.12)),
-      disabledBorder: border(primaryGreen.withValues(alpha: 0.08)),
-      focusedBorder: border(primaryGreen, width: 1.4),
+      enabledBorder: border(_line),
+      disabledBorder: border(_line.withValues(alpha: 0.72)),
+      focusedBorder: border(_ink, width: 1.4),
       errorBorder: border(Colors.redAccent.withValues(alpha: 0.7)),
       focusedErrorBorder: border(Colors.redAccent, width: 1.4),
     );
@@ -157,7 +407,7 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
 
   TextStyle get _inputTextStyle {
     return const TextStyle(
-      color: Color(0xFF1F5A50),
+      color: _ink,
       fontSize: 14,
       fontWeight: FontWeight.w700,
     );
@@ -165,7 +415,7 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
 
   TextStyle get _multilineInputTextStyle {
     return const TextStyle(
-      color: Color(0xFF1F5A50),
+      color: _ink,
       fontSize: 14,
       fontWeight: FontWeight.w700,
       height: 1.35,
@@ -174,35 +424,54 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF1F5A50);
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        foregroundColor: primaryGreen,
+        foregroundColor: _ink,
         elevation: 0,
         centerTitle: true,
         title: const Text(
           "Do'kon ochish",
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            color: _ink,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ),
       body: SafeArea(
         child: _isLoading
             ? const Center(
-                child: CircularProgressIndicator(color: primaryGreen),
+                child: CircularProgressIndicator(color: _primaryGreen),
               )
             : RefreshIndicator(
-                color: primaryGreen,
+                color: _primaryGreen,
                 onRefresh: _loadApplication,
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                   children: [
                     if (_application != null)
-                      _ApplicationStatusCard(application: _application!)
-                    else
-                      _buildForm(primaryGreen),
+                      _ApplicationStatusCard(application: _application!),
+                    if (_application == null ||
+                        _application!.status != 'pending') ...[
+                      if (_application != null) const SizedBox(height: 16),
+                      if (_isFormOpen)
+                        _buildForm()
+                      else
+                        _OpenApplicationButton(
+                          onPressed: () {
+                            setState(() {
+                              if (_application?.status == 'rejected') {
+                                _fillForm(_application!);
+                              }
+                              _error = null;
+                              _message = null;
+                              _isFormOpen = true;
+                            });
+                          },
+                        ),
+                    ],
                   ],
                 ),
               ),
@@ -210,80 +479,291 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
     );
   }
 
-  Widget _buildForm(Color primaryGreen) {
+  Widget _buildForm() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           "Do'kon ochish arizasi",
-          style: TextStyle(
-            color: primaryGreen,
+          style: const TextStyle(
+            color: _ink,
             fontSize: 20,
             fontWeight: FontWeight.w900,
           ),
         ),
         const SizedBox(height: 12),
+        const _FormSectionTitle(title: "Shaxsiy ma'lumotlar"),
+        const SizedBox(height: 10),
         TextField(
-          controller: _firstNameCtrl,
+          controller: _fullNameCtrl,
           enabled: !_isSubmitting,
-          cursorColor: primaryGreen,
+          cursorColor: _ink,
           style: _inputTextStyle,
-          decoration: _inputDecoration('Ism'),
+          textCapitalization: TextCapitalization.words,
+          decoration: _inputDecoration('F.I.Sh'),
         ),
         const SizedBox(height: 10),
         TextField(
-          controller: _lastNameCtrl,
+          controller: _birthDateCtrl,
           enabled: !_isSubmitting,
-          cursorColor: primaryGreen,
+          cursorColor: _ink,
           style: _inputTextStyle,
-          decoration: _inputDecoration('Familiya'),
+          keyboardType: TextInputType.datetime,
+          inputFormatters: [
+            _DateInputFormatter(),
+            LengthLimitingTextInputFormatter(10),
+          ],
+          decoration: _inputDecoration('Tug‘ilgan sana').copyWith(
+            hintText: '1995-05-20',
+            suffixIcon: const Icon(Icons.calendar_month_rounded, color: _muted),
+          ),
+        ),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          initialValue: _gender.isEmpty ? null : _gender,
+          items: const [
+            DropdownMenuItem(value: 'erkak', child: Text('Erkak')),
+            DropdownMenuItem(value: 'ayol', child: Text('Ayol')),
+          ],
+          onChanged: _isSubmitting
+              ? null
+              : (value) => setState(() => _gender = value ?? ''),
+          decoration: _inputDecoration('Jinsi'),
+          dropdownColor: Colors.white,
+          style: _inputTextStyle,
+          iconEnabledColor: _ink,
         ),
         const SizedBox(height: 10),
         TextField(
-          controller: _phoneCtrl,
+          controller: _primaryPhoneCtrl,
           enabled: !_isSubmitting,
+          cursorColor: _ink,
+          style: _inputTextStyle,
           keyboardType: TextInputType.phone,
-          cursorColor: primaryGreen,
-          style: _inputTextStyle,
-          decoration: _inputDecoration('Telefon raqam'),
+          inputFormatters: [_UzPhoneFormatter()],
+          decoration: _inputDecoration('Asosiy telefon'),
         ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _additionalPhoneCtrl,
+          enabled: !_isSubmitting,
+          cursorColor: _ink,
+          style: _inputTextStyle,
+          keyboardType: TextInputType.phone,
+          inputFormatters: [_UzPhoneFormatter()],
+          decoration: _inputDecoration('Qo‘shimcha telefon'),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _emailCtrl,
+          enabled: !_isSubmitting,
+          cursorColor: _ink,
+          style: _inputTextStyle,
+          keyboardType: TextInputType.emailAddress,
+          decoration: _inputDecoration('Email'),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _livingAddressCtrl,
+          enabled: !_isSubmitting,
+          minLines: 2,
+          maxLines: 4,
+          cursorColor: _ink,
+          style: _multilineInputTextStyle,
+          decoration: _inputDecoration(
+            'Yashash manzili',
+          ).copyWith(hintText: "Viloyat, tuman, ko'cha va uy raqami"),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _passportSeriesNumberCtrl,
+          enabled: !_isSubmitting,
+          cursorColor: _ink,
+          style: _inputTextStyle,
+          textCapitalization: TextCapitalization.characters,
+          inputFormatters: [
+            _UppercasePassportFormatter(),
+            LengthLimitingTextInputFormatter(9),
+          ],
+          decoration: _inputDecoration(
+            'Pasport seriya raqami',
+          ).copyWith(hintText: 'AD2467890', counterText: ''),
+          maxLength: 9,
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _jshshirCtrl,
+          enabled: !_isSubmitting,
+          cursorColor: _ink,
+          style: _inputTextStyle,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(14),
+          ],
+          decoration: _inputDecoration(
+            'JSHSHIR',
+          ).copyWith(hintText: '14 ta raqam', counterText: ''),
+          maxLength: 14,
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _passportIssuedByCtrl,
+          enabled: !_isSubmitting,
+          cursorColor: _ink,
+          style: _inputTextStyle,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: _inputDecoration('Pasport kim tomonidan berilgan'),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _passportIssuedDateCtrl,
+          enabled: !_isSubmitting,
+          cursorColor: _ink,
+          style: _inputTextStyle,
+          keyboardType: TextInputType.datetime,
+          inputFormatters: [
+            _DateInputFormatter(),
+            LengthLimitingTextInputFormatter(10),
+          ],
+          decoration: _inputDecoration('Pasport berilgan sana').copyWith(
+            hintText: '2020-01-15',
+            suffixIcon: const Icon(Icons.calendar_month_rounded, color: _muted),
+          ),
+        ),
+        const SizedBox(height: 18),
+        const _FormSectionTitle(title: "Do'kon haqida ma'lumot"),
         const SizedBox(height: 10),
         TextField(
           controller: _storeNameCtrl,
           enabled: !_isSubmitting,
-          cursorColor: primaryGreen,
+          cursorColor: _ink,
           style: _inputTextStyle,
+          textCapitalization: TextCapitalization.words,
           decoration: _inputDecoration("Do'kon nomi"),
         ),
         const SizedBox(height: 10),
-        TextField(
-          controller: _purposeCtrl,
-          enabled: !_isSubmitting,
-          minLines: 2,
-          maxLines: 4,
-          cursorColor: primaryGreen,
-          style: _multilineInputTextStyle,
-          decoration: _inputDecoration('Maqsad'),
+        DropdownButtonFormField<String>(
+          initialValue: _storeType,
+          items: const [
+            DropdownMenuItem(value: 'online', child: Text('Online')),
+            DropdownMenuItem(value: 'offline', child: Text('Offline')),
+            DropdownMenuItem(value: 'both', child: Text('Online va offline')),
+          ],
+          onChanged: _isSubmitting
+              ? null
+              : (value) => setState(() => _storeType = value ?? 'online'),
+          decoration: _inputDecoration("Do'kon turi"),
+          dropdownColor: Colors.white,
+          style: _inputTextStyle,
+          iconEnabledColor: _ink,
         ),
         const SizedBox(height: 10),
         TextField(
-          controller: _productsInfoCtrl,
+          controller: _activityTypeCtrl,
           enabled: !_isSubmitting,
-          minLines: 2,
-          maxLines: 4,
-          cursorColor: primaryGreen,
-          style: _multilineInputTextStyle,
-          decoration: _inputDecoration('Mahsulotlar haqida'),
+          cursorColor: _ink,
+          style: _inputTextStyle,
+          textCapitalization: TextCapitalization.words,
+          decoration: _inputDecoration(
+            "Faoliyat yo'nalishi",
+          ).copyWith(hintText: 'Elektronika, kiyim-kechak, oziq-ovqat'),
         ),
         const SizedBox(height: 10),
         TextField(
-          controller: _addressCtrl,
+          controller: _storeDescriptionCtrl,
           enabled: !_isSubmitting,
           minLines: 2,
-          maxLines: 3,
-          cursorColor: primaryGreen,
+          maxLines: 4,
+          cursorColor: _ink,
           style: _multilineInputTextStyle,
-          decoration: _inputDecoration('Manzil'),
+          decoration: _inputDecoration("Do'kon tavsifi"),
+        ),
+        if (_storeType == 'offline' || _storeType == 'both') ...[
+          const SizedBox(height: 10),
+          TextField(
+            controller: _storeAddressCtrl,
+            enabled: !_isSubmitting,
+            minLines: 2,
+            maxLines: 3,
+            cursorColor: _ink,
+            style: _multilineInputTextStyle,
+            decoration: _inputDecoration(
+              "Do'kon manzili",
+            ).copyWith(hintText: "Viloyat, tuman, ko'cha va mo'ljal"),
+          ),
+        ],
+        const SizedBox(height: 10),
+        TextField(
+          controller: _storeMapLocationCtrl,
+          enabled: !_isSubmitting,
+          cursorColor: _ink,
+          style: _inputTextStyle,
+          keyboardType: TextInputType.url,
+          decoration: _inputDecoration('Google Map link yoki koordinata'),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _workingHoursCtrl,
+          enabled: !_isSubmitting,
+          cursorColor: _ink,
+          style: _inputTextStyle,
+          decoration: _inputDecoration(
+            'Ish vaqti',
+          ).copyWith(hintText: '09:00-21:00'),
+        ),
+        const SizedBox(height: 10),
+        SwitchListTile.adaptive(
+          value: _hasDelivery,
+          onChanged: _isSubmitting
+              ? null
+              : (value) => setState(() => _hasDelivery = value),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 2),
+          activeThumbColor: _primaryGreen,
+          title: const Text(
+            'Yetkazib berish mavjud',
+            style: TextStyle(
+              color: _ink,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        if (_hasDelivery) ...[
+          const SizedBox(height: 10),
+          TextField(
+            controller: _deliveryAreaCtrl,
+            enabled: !_isSubmitting,
+            cursorColor: _ink,
+            style: _inputTextStyle,
+            decoration: _inputDecoration('Yetkazib berish hududi'),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _deliveryPriceCtrl,
+            enabled: !_isSubmitting,
+            cursorColor: _ink,
+            style: _inputTextStyle,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: _inputDecoration(
+              'Yetkazib berish narxi',
+            ).copyWith(hintText: '20000'),
+          ),
+        ],
+        const SizedBox(height: 10),
+        _StoreLogoPicker(
+          file: _storeLogoFile,
+          existingPath: _storeLogoPath,
+          enabled: !_isSubmitting,
+          onPick: _pickStoreLogo,
+        ),
+        const SizedBox(height: 10),
+        _StoreBannerPicker(
+          files: _storeBannerImageFiles,
+          existingPaths: _storeBannerImagePaths,
+          enabled: !_isSubmitting,
+          onPick: _pickStoreBannerImages,
         ),
         if (_error != null) ...[
           const SizedBox(height: 10),
@@ -301,7 +781,7 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
           Text(
             _message!,
             style: TextStyle(
-              color: primaryGreen,
+              color: _ink,
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
@@ -314,9 +794,9 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
           child: ElevatedButton(
             onPressed: _isSubmitting ? null : _submitApplication,
             style: ElevatedButton.styleFrom(
-              backgroundColor: primaryGreen,
+              backgroundColor: _primaryGreen,
               foregroundColor: Colors.white,
-              disabledBackgroundColor: primaryGreen.withValues(alpha: 0.72),
+              disabledBackgroundColor: _primaryGreen.withValues(alpha: 0.72),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -338,6 +818,320 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
   }
 }
 
+class _FormSectionTitle extends StatelessWidget {
+  final String title;
+
+  const _FormSectionTitle({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: _ink,
+        fontSize: 15,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+  }
+}
+
+class _StoreLogoPicker extends StatelessWidget {
+  final File? file;
+  final String existingPath;
+  final bool enabled;
+  final VoidCallback onPick;
+
+  const _StoreLogoPicker({
+    required this.file,
+    required this.existingPath,
+    required this.enabled,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = file != null || existingPath.isNotEmpty;
+
+    return InkWell(
+      onTap: enabled ? onPick : null,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _line),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                width: 58,
+                height: 58,
+                color: Colors.white,
+                child: file != null
+                    ? Image.file(file!, fit: BoxFit.cover)
+                    : const Icon(
+                        Icons.add_photo_alternate_rounded,
+                        color: _primaryGreen,
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Do'kon rasmi/logo",
+                    style: TextStyle(
+                      color: _ink,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    file != null
+                        ? file!.path.split(Platform.pathSeparator).last
+                        : hasImage
+                        ? "Qayta yuborish uchun yangi rasm tanlang"
+                        : 'Galereyadan rasm tanlang',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _muted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: enabled ? onPick : null,
+              icon: const Icon(Icons.photo_library_rounded),
+              color: _primaryGreen,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StoreBannerPicker extends StatelessWidget {
+  final List<File> files;
+  final List<String> existingPaths;
+  final bool enabled;
+  final VoidCallback onPick;
+
+  const _StoreBannerPicker({
+    required this.files,
+    required this.existingPaths,
+    required this.enabled,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final count = files.isNotEmpty ? files.length : existingPaths.length;
+
+    return InkWell(
+      onTap: enabled ? onPick : null,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Banner rasmlar',
+                    style: TextStyle(
+                      color: _ink,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: enabled ? onPick : null,
+                  icon: const Icon(Icons.collections_rounded),
+                  color: _primaryGreen,
+                ),
+              ],
+            ),
+            Text(
+              count == 0
+                  ? 'Ixtiyoriy. Galereyadan bir nechta rasm tanlash mumkin'
+                  : '$count ta rasm tanlangan',
+              style: const TextStyle(
+                color: _muted,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (files.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 64,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: files.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.file(
+                        files[index],
+                        width: 84,
+                        height: 64,
+                        fit: BoxFit.cover,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OpenApplicationButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _OpenApplicationButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Yangi do'kon ochish",
+            style: TextStyle(
+              color: _ink,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "Ariza yuborish uchun shaxsiy va pasport ma'lumotlaringizni kiriting.",
+            style: TextStyle(
+              color: _muted,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton.icon(
+              onPressed: onPressed,
+              icon: const Icon(Icons.edit_document),
+              label: const Text('Ariza yuborish'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryGreen,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final limited = digits.length > 8 ? digits.substring(0, 8) : digits;
+    final buffer = StringBuffer();
+
+    for (var index = 0; index < limited.length; index += 1) {
+      if (index == 4 || index == 6) buffer.write('-');
+      buffer.write(limited[index]);
+    }
+
+    final text = buffer.toString();
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
+
+class _UzPhoneFormatter extends TextInputFormatter {
+  static String formatText(String value) {
+    var digits = value.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('998')) digits = digits.substring(3);
+    if (digits.length > 9) digits = digits.substring(0, 9);
+
+    final buffer = StringBuffer('+998');
+    if (digits.isNotEmpty) {
+      buffer.write(' ');
+      buffer.write(digits.substring(0, digits.length < 2 ? digits.length : 2));
+    }
+    if (digits.length > 2) {
+      buffer.write('-');
+      buffer.write(digits.substring(2, digits.length < 5 ? digits.length : 5));
+    }
+    if (digits.length > 5) {
+      buffer.write('-');
+      buffer.write(digits.substring(5, digits.length < 7 ? digits.length : 7));
+    }
+    if (digits.length > 7) {
+      buffer.write('-');
+      buffer.write(digits.substring(7, digits.length < 9 ? digits.length : 9));
+    }
+
+    return buffer.toString();
+  }
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final text = formatText(newValue.text);
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
+
 class _ApplicationStatusCard extends StatelessWidget {
   final SellerApplication application;
 
@@ -345,42 +1139,131 @@ class _ApplicationStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF1F5A50);
     final statusText = switch (application.status) {
       'approved' => 'Tasdiqlangan',
       'rejected' => 'Rad etilgan',
       _ => 'Ko‘rib chiqilmoqda',
     };
+    final statusDescription = switch (application.status) {
+      'approved' =>
+        'Arizangiz tasdiqlandi. Do‘koningiz "Mening do‘konlarim" bo‘limida ko‘rinadi.',
+      'rejected' =>
+        application.reviewNote.isEmpty
+            ? 'Arizangiz rad etildi. Ma’lumotlarni yangilab qayta yuborishingiz mumkin.'
+            : application.reviewNote,
+      _ => 'Arizangiz ko‘rib chiqilmoqda. Natijasi shu yerda ko‘rsatiladi.',
+    };
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFE6F4EF),
+        color: _surface,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.assignment_turned_in_rounded, color: primaryGreen),
+          const Icon(Icons.assignment_turned_in_rounded, color: _primaryGreen),
           const SizedBox(height: 10),
           Text(
             statusText,
             style: const TextStyle(
-              color: primaryGreen,
+              color: _ink,
               fontSize: 20,
               fontWeight: FontWeight.w900,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            application.reviewNote.isEmpty
-                ? 'Arizangiz holati shu yerda ko‘rsatiladi.'
-                : application.reviewNote,
+            statusDescription,
             style: TextStyle(
-              color: primaryGreen.withValues(alpha: 0.72),
+              color: _muted,
               fontSize: 13,
               fontWeight: FontWeight.w600,
               height: 1.35,
+            ),
+          ),
+          if (application.fullName.isNotEmpty ||
+              application.storeName.isNotEmpty ||
+              application.primaryPhone.isNotEmpty ||
+              application.passportSeriesNumber.isNotEmpty ||
+              application.livingAddress.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            if (application.fullName.isNotEmpty)
+              _ApplicationInfoRow(
+                icon: Icons.person_rounded,
+                text: application.fullName,
+              ),
+            if (application.storeName.isNotEmpty)
+              _ApplicationInfoRow(
+                icon: Icons.storefront_rounded,
+                text: application.storeName,
+              ),
+            if (application.primaryPhone.isNotEmpty)
+              _ApplicationInfoRow(
+                icon: Icons.phone_rounded,
+                text: application.primaryPhone,
+              ),
+            if (application.passportSeriesNumber.isNotEmpty)
+              _ApplicationInfoRow(
+                icon: Icons.badge_rounded,
+                text: application.passportSeriesNumber,
+              ),
+            if (application.livingAddress.isNotEmpty)
+              _ApplicationInfoRow(
+                icon: Icons.location_on_rounded,
+                text: application.livingAddress,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _UppercasePassportFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final value = newValue.text.toUpperCase().replaceAll(
+      RegExp(r'[^A-Z0-9]'),
+      '',
+    );
+
+    return TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+  }
+}
+
+class _ApplicationInfoRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _ApplicationInfoRow({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: _primaryGreen, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: _ink.withValues(alpha: 0.82),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+              ),
             ),
           ),
         ],

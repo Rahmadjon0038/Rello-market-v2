@@ -14,11 +14,38 @@ class AdminPanelScreen extends StatefulWidget {
 }
 
 class _AdminPanelScreenState extends State<AdminPanelScreen> {
+  final StoreApiService _storeApi = StoreApiService();
   int _currentIndex = 0;
+  int _applicationBadgeCount = 0;
+  bool _hasNewApplications = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadApplicationBadge();
+  }
+
+  Future<void> _loadApplicationBadge() async {
+    try {
+      final badge = await _storeApi.getAdminSellerApplicationsBadge();
+      if (!mounted || _currentIndex == 1) return;
+      setState(() {
+        _applicationBadgeCount = badge.count;
+        _hasNewApplications = badge.hasNew;
+      });
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        _applicationBadgeCount = 0;
+        _hasNewApplications = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
+    const ink = Color(0xFF1F2933);
     final pages = const [_AdminCategoriesPage(), _AdminStoreRequestsPage()];
 
     return Scaffold(
@@ -26,33 +53,100 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        foregroundColor: primaryGreen,
+        foregroundColor: ink,
         title: const Text(
           'Boshqaruv paneli',
-          style: TextStyle(fontWeight: FontWeight.w900),
+          style: TextStyle(color: ink, fontWeight: FontWeight.w900),
         ),
       ),
       body: SafeArea(child: pages[_currentIndex]),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
-          setState(() => _currentIndex = index);
+          setState(() {
+            _currentIndex = index;
+            if (index == 1) {
+              _applicationBadgeCount = 0;
+              _hasNewApplications = false;
+            }
+          });
         },
         indicatorColor: const Color(0xFFE6F4EF),
         backgroundColor: Colors.white,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.category_outlined),
-            selectedIcon: Icon(Icons.category_rounded),
+        destinations: [
+          const NavigationDestination(
+            icon: Icon(Icons.category_outlined, color: ink),
+            selectedIcon: Icon(Icons.category_rounded, color: primaryGreen),
             label: 'Categoriyalar',
           ),
           NavigationDestination(
-            icon: Icon(Icons.storefront_outlined),
-            selectedIcon: Icon(Icons.storefront_rounded),
+            icon: _ApplicationsNavIcon(
+              count: _applicationBadgeCount,
+              showBadge: _hasNewApplications,
+              selected: false,
+            ),
+            selectedIcon: _ApplicationsNavIcon(
+              count: _applicationBadgeCount,
+              showBadge: _hasNewApplications,
+              selected: true,
+            ),
             label: 'Arizalar',
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ApplicationsNavIcon extends StatelessWidget {
+  final int count;
+  final bool showBadge;
+  final bool selected;
+
+  const _ApplicationsNavIcon({
+    required this.count,
+    required this.showBadge,
+    required this.selected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+    const ink = Color(0xFF1F2933);
+    final label = count > 99 ? '99+' : count.toString();
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(
+          selected ? Icons.storefront_rounded : Icons.storefront_outlined,
+          color: selected ? primaryGreen : ink,
+        ),
+        if (showBadge)
+          Positioned(
+            right: -9,
+            top: -7,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 5),
+              decoration: BoxDecoration(
+                color: Colors.redAccent,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.white, width: 1.5),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                count > 0 ? label : '',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -774,6 +868,8 @@ class _AdminStoreRequestsPageState extends State<_AdminStoreRequestsPage> {
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
+    const ink = Color(0xFF1F2933);
+    const line = Color(0xFFE5E7EB);
 
     return RefreshIndicator(
       color: primaryGreen,
@@ -781,10 +877,10 @@ class _AdminStoreRequestsPageState extends State<_AdminStoreRequestsPage> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
         children: [
-          const Text(
+          Text(
             'Do‘kon arizalari',
             style: TextStyle(
-              color: primaryGreen,
+              color: ink,
               fontSize: 22,
               fontWeight: FontWeight.w900,
             ),
@@ -795,7 +891,7 @@ class _AdminStoreRequestsPageState extends State<_AdminStoreRequestsPage> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _statuses.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (context, index) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
                 final status = _statuses[index];
                 final selected = status == _selectedStatus;
@@ -808,11 +904,11 @@ class _AdminStoreRequestsPageState extends State<_AdminStoreRequestsPage> {
                   },
                   selectedColor: primaryGreen,
                   labelStyle: TextStyle(
-                    color: selected ? Colors.white : primaryGreen,
+                    color: selected ? Colors.white : ink,
                     fontWeight: FontWeight.w700,
                   ),
                   backgroundColor: Colors.white,
-                  side: BorderSide(color: primaryGreen.withValues(alpha: 0.18)),
+                  side: BorderSide(color: selected ? primaryGreen : line),
                 );
               },
             ),
@@ -878,13 +974,16 @@ class _ApplicationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
+    const ink = Color(0xFF1F2933);
+    const muted = Color(0xFF6B7280);
+    const line = Color(0xFFE5E7EB);
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: primaryGreen.withValues(alpha: 0.12)),
+        border: Border.all(color: application.adminSeen ? line : primaryGreen),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -908,7 +1007,7 @@ class _ApplicationTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: primaryGreen,
+                    color: ink,
                     fontSize: 15,
                     fontWeight: FontWeight.w900,
                   ),
@@ -919,9 +1018,11 @@ class _ApplicationTile extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            application.fullName,
-            style: TextStyle(
-              color: primaryGreen.withValues(alpha: 0.72),
+            application.fullName.isEmpty
+                ? application.email
+                : application.fullName,
+            style: const TextStyle(
+              color: muted,
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
@@ -929,10 +1030,7 @@ class _ApplicationTile extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              Text(
-                application.phone,
-                style: TextStyle(color: primaryGreen.withValues(alpha: 0.72)),
-              ),
+              Text(application.contact, style: const TextStyle(color: muted)),
               const Spacer(),
               TextButton(onPressed: onDetails, child: const Text('Batafsil')),
             ],
@@ -1019,11 +1117,77 @@ class _ApplicationDetailsSheet extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
         children: [
           _DetailRow(title: 'Ism familiya', value: application.fullName),
-          _DetailRow(title: 'Telefon', value: application.phone),
+          _DetailRow(title: 'Tug‘ilgan sana', value: application.birthDate),
+          _DetailRow(title: 'Jinsi', value: application.gender),
+          _DetailRow(title: 'Asosiy telefon', value: application.primaryPhone),
+          _DetailRow(
+            title: 'Qo‘shimcha telefon',
+            value: application.additionalPhone,
+          ),
+          _DetailRow(title: 'Email', value: application.email),
+          _DetailRow(
+            title: 'Yashash manzili',
+            value: application.livingAddress,
+          ),
+          _DetailRow(
+            title: 'Pasport seriya raqami',
+            value: application.passportSeriesNumber,
+          ),
+          _DetailRow(title: 'JSHSHIR', value: application.jshshir),
+          _DetailRow(
+            title: 'Pasport kim tomonidan berilgan',
+            value: application.passportIssuedBy,
+          ),
+          _DetailRow(
+            title: 'Pasport berilgan sana',
+            value: application.passportIssuedDate,
+          ),
           _DetailRow(title: "Do'kon nomi", value: application.storeName),
-          _DetailRow(title: 'Maqsad', value: application.purpose),
-          _DetailRow(title: 'Mahsulotlar', value: application.productsInfo),
-          _DetailRow(title: 'Manzil', value: application.address),
+          _DetailRow(title: "Do'kon turi", value: application.storeType),
+          _DetailRow(
+            title: "Faoliyat yo'nalishi",
+            value: application.activityType,
+          ),
+          _DetailRow(
+            title: "Do'kon tavsifi",
+            value: application.storeDescription,
+          ),
+          _DetailRow(title: "Do'kon manzili", value: application.storeAddress),
+          _DetailRow(
+            title: 'Google Map link',
+            value: application.storeMapLocation,
+          ),
+          _DetailRow(title: 'Ish vaqti', value: application.workingHours),
+          _DetailRow(
+            title: 'Yetkazib berish',
+            value: application.hasDelivery ? 'Ha' : "Yo'q",
+          ),
+          if (application.hasDelivery) ...[
+            _DetailRow(
+              title: 'Yetkazib berish hududi',
+              value: application.deliveryArea,
+            ),
+            _DetailRow(
+              title: 'Yetkazib berish narxi',
+              value: application.deliveryPrice.toString(),
+            ),
+          ],
+          _DetailRow(title: "Do'kon logo", value: application.storeLogo),
+          _DetailRow(
+            title: 'Banner rasmlar',
+            value: application.storeBannerImages.join('\n'),
+          ),
+          _DetailRow(title: 'Yuborilgan vaqt', value: application.submittedAt),
+          if (application.approvedAt.isNotEmpty)
+            _DetailRow(
+              title: 'Tasdiqlangan vaqt',
+              value: application.approvedAt,
+            ),
+          if (application.rejectedAt.isNotEmpty)
+            _DetailRow(
+              title: 'Rad etilgan vaqt',
+              value: application.rejectedAt,
+            ),
           if (application.reviewNote.isNotEmpty)
             _DetailRow(title: 'Izoh', value: application.reviewNote),
         ],
