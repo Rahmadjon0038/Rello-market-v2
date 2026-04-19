@@ -5,6 +5,7 @@ import 'package:hello_flutter_app/config/api_config.dart';
 import 'package:hello_flutter_app/models/category.dart';
 import 'package:hello_flutter_app/models/product.dart';
 import 'package:hello_flutter_app/models/seller.dart';
+import 'package:hello_flutter_app/models/store_summary.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 
 class SellerProductsResponse {
@@ -12,6 +13,13 @@ class SellerProductsResponse {
   final List<Product> products;
 
   const SellerProductsResponse({required this.seller, required this.products});
+}
+
+class StoreProductsResponse {
+  final StoreSummary store;
+  final List<Product> products;
+
+  const StoreProductsResponse({required this.store, required this.products});
 }
 
 class ProductSummary {
@@ -125,6 +133,25 @@ class ProductApiService {
     );
   }
 
+  Future<StoreProductsResponse> getStoreProducts(String storeId) async {
+    final data = await _send('GET', '/stores/$storeId/products');
+    final rawStore = data['store'];
+    if (rawStore is! Map<String, dynamic>) {
+      throw const AuthApiException("Do'kon ma'lumoti topilmadi");
+    }
+    final rawProducts = data['data'];
+    final products = rawProducts is List
+        ? rawProducts
+              .whereType<Map<String, dynamic>>()
+              .map(Product.fromJson)
+              .toList()
+        : <Product>[];
+    return StoreProductsResponse(
+      store: StoreSummary.fromJson(rawStore),
+      products: products,
+    );
+  }
+
   Future<Product> createProduct(Map<String, dynamic> body) async {
     final data = await _send(
       'POST',
@@ -135,12 +162,39 @@ class ProductApiService {
     return Product.fromJson(data);
   }
 
+  Future<Product> createProductMultipart({
+    required Map<String, dynamic> fields,
+    required List<File> images,
+  }) async {
+    final data = await _sendMultipart(
+      'POST',
+      '/products',
+      fields: fields,
+      files: {if (images.isNotEmpty) 'images': images},
+    );
+    return Product.fromJson(data);
+  }
+
   Future<Product> updateProduct(String id, Map<String, dynamic> body) async {
     final data = await _send(
       'PATCH',
       '/products/$id',
       authRequired: true,
       body: body,
+    );
+    return Product.fromJson(data);
+  }
+
+  Future<Product> updateProductMultipart(
+    String id, {
+    required Map<String, dynamic> fields,
+    List<File> images = const [],
+  }) async {
+    final data = await _sendMultipart(
+      'PATCH',
+      '/products/$id',
+      fields: fields,
+      files: {if (images.isNotEmpty) 'images': images},
     );
     return Product.fromJson(data);
   }
@@ -271,6 +325,86 @@ class ProductApiService {
     }
 
     return decoded;
+  }
+
+  Future<Map<String, dynamic>> _sendMultipart(
+    String method,
+    String path, {
+    required Map<String, dynamic> fields,
+    required Map<String, List<File>> files,
+  }) async {
+    final session = await _authApi.loadSavedSession();
+    if (session == null) throw const AuthApiException('Avval tizimga kiring');
+
+    final boundary = '----RelloMarket${DateTime.now().microsecondsSinceEpoch}';
+    final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+    final request = await _client.openUrl(method, uri);
+    request.headers.set(
+      HttpHeaders.authorizationHeader,
+      'Bearer ${session.accessToken}',
+    );
+    request.headers.set(
+      HttpHeaders.contentTypeHeader,
+      'multipart/form-data; boundary=$boundary',
+    );
+
+    void writeField(String name, String value) {
+      request.write('--$boundary\r\n');
+      request.write('Content-Disposition: form-data; name="$name"\r\n\r\n');
+      request.write('$value\r\n');
+    }
+
+    for (final entry in fields.entries) {
+      final value = entry.value;
+      if (value is List) {
+        for (final item in value) {
+          writeField(entry.key, item.toString());
+        }
+      } else {
+        writeField(entry.key, value.toString());
+      }
+    }
+
+    for (final entry in files.entries) {
+      for (final file in entry.value) {
+        final fileName = file.path.split(Platform.pathSeparator).last;
+        request.write('--$boundary\r\n');
+        request.write(
+          'Content-Disposition: form-data; name="${entry.key}"; filename="$fileName"\r\n',
+        );
+        request.write('Content-Type: ${_imageContentType(fileName)}\r\n\r\n');
+        await request.addStream(file.openRead());
+        request.write('\r\n');
+      }
+    }
+
+    request.write('--$boundary--\r\n');
+    final response = await request.close();
+    final rawBody = await response.transform(utf8.decoder).join();
+    final decoded = _decodeJson(rawBody);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final exception = AuthApiException(
+        decoded['error']?.toString() ??
+            decoded['message']?.toString() ??
+            'Server xatosi',
+        statusCode: response.statusCode,
+      );
+      if (AuthApiService.isInvalidSessionError(exception)) {
+        await _authApi.clearSession();
+      }
+      throw exception;
+    }
+
+    return decoded;
+  }
+
+  String _imageContentType(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    return 'image/jpeg';
   }
 
   Map<String, dynamic> _decodeJson(String rawBody) {

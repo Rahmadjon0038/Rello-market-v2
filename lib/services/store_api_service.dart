@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:hello_flutter_app/config/api_config.dart';
 import 'package:hello_flutter_app/models/seller_application.dart';
 import 'package:hello_flutter_app/models/store.dart';
+import 'package:hello_flutter_app/models/store_details.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 
 class SellerApplicationCreateInput {
@@ -200,6 +201,13 @@ class StoreApiService {
         .whereType<Map<String, dynamic>>()
         .map(StoreModel.fromJson)
         .toList();
+  }
+
+  Future<StoreDetails> getMyStore(String id) async {
+    final data = await _send('GET', '/me/stores/$id');
+    final raw = data['store'];
+    if (raw is Map<String, dynamic>) return StoreDetails.fromJson(raw);
+    throw const AuthApiException("Do'kon javobi noto'g'ri formatda");
   }
 
   Future<Map<String, dynamic>> _send(

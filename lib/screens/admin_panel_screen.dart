@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hello_flutter_app/config/api_config.dart';
 import 'package:hello_flutter_app/models/category.dart';
 import 'package:hello_flutter_app/models/seller_application.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
@@ -1081,9 +1082,9 @@ class _StatusPill extends StatelessWidget {
       _ => Colors.orange,
     };
     final label = switch (status) {
-      'approved' => 'approved',
-      'rejected' => 'rejected',
-      _ => 'pending',
+      'approved' => 'Tasdiqlangan',
+      'rejected' => 'Rad etilgan',
+      _ => 'Kutilmoqda',
     };
 
     return Container(
@@ -1109,87 +1110,166 @@ class _ApplicationDetailsSheet extends StatelessWidget {
 
   const _ApplicationDetailsSheet({required this.application});
 
+  String _pad2(int v) => v.toString().padLeft(2, '0');
+
+  DateTime? _tryParseDateTime(String raw) {
+    if (raw.trim().isEmpty) return null;
+    try {
+      return DateTime.parse(raw);
+    } on Object {
+      return null;
+    }
+  }
+
+  String _formatDate(String raw) {
+    final parsed = _tryParseDateTime(raw);
+    if (parsed == null) return raw.isEmpty ? '' : raw;
+    final local = parsed.toLocal();
+    return '${local.year}-${_pad2(local.month)}-${_pad2(local.day)}';
+  }
+
+  String _formatDateTime(String raw) {
+    final parsed = _tryParseDateTime(raw);
+    if (parsed == null) return raw.isEmpty ? '' : raw;
+    final local = parsed.toLocal();
+    return '${local.year}-${_pad2(local.month)}-${_pad2(local.day)} '
+        '${_pad2(local.hour)}:${_pad2(local.minute)}';
+  }
+
+  String? _absoluteUrl(String pathOrUrl) {
+    final value = pathOrUrl.trim();
+    if (value.isEmpty) return null;
+    if (value.startsWith('http://') || value.startsWith('https://'))
+      return value;
+    final base = ApiConfig.baseUrl.replaceAll(RegExp(r'/+$'), '');
+    final path = value.startsWith('/') ? value : '/$value';
+    return '$base$path';
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: ListView(
-        shrinkWrap: true,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _DetailRow(title: 'Ism familiya', value: application.fullName),
-          _DetailRow(title: 'Tug‘ilgan sana', value: application.birthDate),
-          _DetailRow(title: 'Jinsi', value: application.gender),
-          _DetailRow(title: 'Asosiy telefon', value: application.primaryPhone),
-          _DetailRow(
-            title: 'Qo‘shimcha telefon',
-            value: application.additionalPhone,
-          ),
-          _DetailRow(title: 'Email', value: application.email),
-          _DetailRow(
-            title: 'Yashash manzili',
-            value: application.livingAddress,
-          ),
-          _DetailRow(
-            title: 'Pasport seriya raqami',
-            value: application.passportSeriesNumber,
-          ),
-          _DetailRow(title: 'JSHSHIR', value: application.jshshir),
-          _DetailRow(
-            title: 'Pasport kim tomonidan berilgan',
-            value: application.passportIssuedBy,
-          ),
-          _DetailRow(
-            title: 'Pasport berilgan sana',
-            value: application.passportIssuedDate,
-          ),
-          _DetailRow(title: "Do'kon nomi", value: application.storeName),
-          _DetailRow(title: "Do'kon turi", value: application.storeType),
-          _DetailRow(
-            title: "Faoliyat yo'nalishi",
-            value: application.activityType,
-          ),
-          _DetailRow(
-            title: "Do'kon tavsifi",
-            value: application.storeDescription,
-          ),
-          _DetailRow(title: "Do'kon manzili", value: application.storeAddress),
-          _DetailRow(
-            title: 'Google Map link',
-            value: application.storeMapLocation,
-          ),
-          _DetailRow(title: 'Ish vaqti', value: application.workingHours),
-          _DetailRow(
-            title: 'Yetkazib berish',
-            value: application.hasDelivery ? 'Ha' : "Yo'q",
-          ),
-          if (application.hasDelivery) ...[
-            _DetailRow(
-              title: 'Yetkazib berish hududi',
-              value: application.deliveryArea,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 8, 8),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    "Ariza detail",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Yopish',
+                ),
+              ],
             ),
-            _DetailRow(
-              title: 'Yetkazib berish narxi',
-              value: application.deliveryPrice.toString(),
-            ),
-          ],
-          _DetailRow(title: "Do'kon logo", value: application.storeLogo),
-          _DetailRow(
-            title: 'Banner rasmlar',
-            value: application.storeBannerImages.join('\n'),
           ),
-          _DetailRow(title: 'Yuborilgan vaqt', value: application.submittedAt),
-          if (application.approvedAt.isNotEmpty)
-            _DetailRow(
-              title: 'Tasdiqlangan vaqt',
-              value: application.approvedAt,
+          const Divider(height: 1),
+          Flexible(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+              children: [
+                _DetailRow(title: 'Ism familiya', value: application.fullName),
+                _DetailRow(
+                  title: 'Tug‘ilgan sana',
+                  value: _formatDate(application.birthDate),
+                ),
+                _DetailRow(title: 'Jinsi', value: application.gender),
+                _DetailRow(
+                  title: 'Asosiy telefon',
+                  value: application.primaryPhone,
+                ),
+                _DetailRow(
+                  title: 'Qo‘shimcha telefon',
+                  value: application.additionalPhone,
+                ),
+                _DetailRow(title: 'Email', value: application.email),
+                _DetailRow(
+                  title: 'Yashash manzili',
+                  value: application.livingAddress,
+                ),
+                _DetailRow(
+                  title: 'Pasport seriya raqami',
+                  value: application.passportSeriesNumber,
+                ),
+                _DetailRow(title: 'JSHSHIR', value: application.jshshir),
+                _DetailRow(
+                  title: 'Pasport kim tomonidan berilgan',
+                  value: application.passportIssuedBy,
+                ),
+                _DetailRow(
+                  title: 'Pasport berilgan sana',
+                  value: _formatDate(application.passportIssuedDate),
+                ),
+                _DetailRow(title: "Do'kon nomi", value: application.storeName),
+                _DetailRow(title: "Do'kon turi", value: application.storeType),
+                _DetailRow(
+                  title: "Faoliyat yo'nalishi",
+                  value: application.activityType,
+                ),
+                _DetailRow(
+                  title: "Do'kon tavsifi",
+                  value: application.storeDescription,
+                ),
+                _DetailRow(
+                  title: "Do'kon manzili",
+                  value: application.storeAddress,
+                ),
+                _DetailRow(
+                  title: 'Google Map link',
+                  value: application.storeMapLocation,
+                ),
+                _DetailRow(title: 'Ish vaqti', value: application.workingHours),
+                _DetailRow(
+                  title: 'Yetkazib berish',
+                  value: application.hasDelivery ? 'Ha' : "Yo'q",
+                ),
+                if (application.hasDelivery) ...[
+                  _DetailRow(
+                    title: 'Yetkazib berish hududi',
+                    value: application.deliveryArea,
+                  ),
+                  _DetailRow(
+                    title: 'Yetkazib berish narxi',
+                    value: application.deliveryPrice.toString(),
+                  ),
+                ],
+                _ImageDetailRow(
+                  title: "Do'kon logo",
+                  url: _absoluteUrl(application.storeLogo),
+                ),
+                _ImagesDetailRow(
+                  title: 'Banner rasmlar',
+                  urls: application.storeBannerImages
+                      .map(_absoluteUrl)
+                      .whereType<String>()
+                      .toList(),
+                ),
+                _DetailRow(
+                  title: 'Yuborilgan vaqt',
+                  value: _formatDateTime(application.submittedAt),
+                ),
+                if (application.approvedAt.isNotEmpty)
+                  _DetailRow(
+                    title: 'Tasdiqlangan vaqt',
+                    value: _formatDateTime(application.approvedAt),
+                  ),
+                if (application.rejectedAt.isNotEmpty)
+                  _DetailRow(
+                    title: 'Rad etilgan vaqt',
+                    value: _formatDateTime(application.rejectedAt),
+                  ),
+                if (application.reviewNote.isNotEmpty)
+                  _DetailRow(title: 'Izoh', value: application.reviewNote),
+              ],
             ),
-          if (application.rejectedAt.isNotEmpty)
-            _DetailRow(
-              title: 'Rad etilgan vaqt',
-              value: application.rejectedAt,
-            ),
-          if (application.reviewNote.isNotEmpty)
-            _DetailRow(title: 'Izoh', value: application.reviewNote),
+          ),
         ],
       ),
     );
@@ -1228,6 +1308,168 @@ class _DetailRow extends StatelessWidget {
               fontWeight: FontWeight.w800,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImageDetailRow extends StatelessWidget {
+  final String title;
+  final String? url;
+
+  const _ImageDetailRow({required this.title, required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+    final hasUrl = url != null && url!.trim().isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: primaryGreen.withValues(alpha: 0.62),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (!hasUrl)
+            const Text(
+              '-',
+              style: TextStyle(
+                color: primaryGreen,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
+            )
+          else
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Image.network(
+                  url!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: primaryGreen.withValues(alpha: 0.06),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        "Rasm yuklanmadi",
+                        style: TextStyle(
+                          color: primaryGreen,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    );
+                  },
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      color: primaryGreen.withValues(alpha: 0.06),
+                      alignment: Alignment.center,
+                      child: const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImagesDetailRow extends StatelessWidget {
+  final String title;
+  final List<String> urls;
+
+  const _ImagesDetailRow({required this.title, required this.urls});
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: primaryGreen.withValues(alpha: 0.62),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (urls.isEmpty)
+            const Text(
+              '-',
+              style: TextStyle(
+                color: primaryGreen,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
+            )
+          else
+            SizedBox(
+              height: 120,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: urls.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (context, index) {
+                  final url = urls[index];
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: Image.network(
+                        url,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: primaryGreen.withValues(alpha: 0.06),
+                            alignment: Alignment.center,
+                            child: const Text(
+                              "Rasm yuklanmadi",
+                              style: TextStyle(
+                                color: primaryGreen,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          );
+                        },
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Container(
+                            color: primaryGreen.withValues(alpha: 0.06),
+                            alignment: Alignment.center,
+                            child: const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );

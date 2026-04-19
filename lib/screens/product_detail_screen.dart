@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hello_flutter_app/models/product.dart';
-import 'package:hello_flutter_app/models/seller.dart';
-import 'package:hello_flutter_app/screens/seller_screen.dart';
+import 'package:hello_flutter_app/models/store_summary.dart';
+import 'package:hello_flutter_app/screens/store_products_screen.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/product_api_service.dart';
 import 'package:hello_flutter_app/widgets/product_image.dart';
@@ -119,13 +119,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  Future<void> _openSeller(Seller seller) async {
-    if (seller.id.isEmpty) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => SellerScreen(sellerId: seller.id)),
+  void _openStore(StoreSummary store) {
+    if (store.id.isEmpty) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => StoreProductsScreen(storeId: store.id)),
     );
-    if (!mounted) return;
-    _loadProduct();
   }
 
   @override
@@ -268,11 +266,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             fontWeight: FontWeight.w500,
           ),
         ),
-        if (product.seller != null && product.seller!.id.isNotEmpty) ...[
+        if (product.store != null && product.store!.id.isNotEmpty) ...[
           const SizedBox(height: 20),
-          _SellerBlock(
-            seller: product.seller!,
-            onTap: () => _openSeller(product.seller!),
+          _StoreBlock(
+            store: product.store!,
+            onTap: () => _openStore(product.store!),
           ),
         ],
         const SizedBox(height: 20),
@@ -317,16 +315,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 }
 
-class _SellerBlock extends StatelessWidget {
-  final Seller seller;
+class _StoreBlock extends StatelessWidget {
+  final StoreSummary store;
   final VoidCallback onTap;
 
-  const _SellerBlock({required this.seller, required this.onTap});
+  const _StoreBlock({required this.store, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
-    final imageUrl = seller.resolvedProfileImg;
+    final imageUrl = Product.resolveImagePath(store.imagePath);
 
     return Material(
       color: const Color(0xFFE6F4EF),
@@ -341,8 +339,10 @@ class _SellerBlock extends StatelessWidget {
               CircleAvatar(
                 radius: 26,
                 backgroundColor: Colors.white,
-                backgroundImage: _profileImageProvider(imageUrl),
-                child: imageUrl.isEmpty
+                backgroundImage: store.imagePath.trim().isEmpty
+                    ? null
+                    : NetworkImage(imageUrl),
+                child: store.imagePath.trim().isEmpty
                     ? const Icon(Icons.storefront_rounded, color: primaryGreen)
                     : null,
               ),
@@ -352,7 +352,7 @@ class _SellerBlock extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      seller.fullName.isEmpty ? 'Sotuvchi' : seller.fullName,
+                      store.name.isEmpty ? "Do'kon" : store.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -361,10 +361,10 @@ class _SellerBlock extends StatelessWidget {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    if (seller.contact.isNotEmpty) ...[
+                    if (store.activityType.trim().isNotEmpty) ...[
                       const SizedBox(height: 3),
                       Text(
-                        seller.contact,
+                        store.activityType,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -389,14 +389,6 @@ class _SellerBlock extends StatelessWidget {
       ),
     );
   }
-}
-
-ImageProvider? _profileImageProvider(String imageUrl) {
-  if (imageUrl.isEmpty) return null;
-  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-    return NetworkImage(imageUrl);
-  }
-  return AssetImage(imageUrl);
 }
 
 class _InfoChip extends StatelessWidget {

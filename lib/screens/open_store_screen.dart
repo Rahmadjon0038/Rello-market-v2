@@ -6,7 +6,6 @@ import 'package:hello_flutter_app/models/seller_application.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/store_api_service.dart';
 import 'package:image_picker/image_picker.dart';
-
 const _primaryGreen = Color(0xFF1F5A50);
 const _ink = Color(0xFF1F2933);
 const _muted = Color(0xFF6B7280);

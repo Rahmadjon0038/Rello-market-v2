@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hello_flutter_app/models/store.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/store_api_service.dart';
+import 'package:hello_flutter_app/screens/store_detail_screen.dart';
 
 class MyStoresScreen extends StatefulWidget {
   const MyStoresScreen({super.key});
@@ -106,61 +107,85 @@ class _StoreTile extends StatelessWidget {
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: primaryGreen.withValues(alpha: 0.12)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 7),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE6F4EF),
-              borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  StoreDetailScreen(storeId: store.id, initialStore: store),
             ),
-            child: const Icon(Icons.storefront_rounded, color: primaryGreen),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: primaryGreen.withValues(alpha: 0.12)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 14,
+                offset: const Offset(0, 7),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  store.name.isEmpty ? "Do'kon" : store.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: primaryGreen,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE6F4EF),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  store.description.isEmpty ? 'Tavsif yo‘q' : store.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: primaryGreen.withValues(alpha: 0.68),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
+                child: const Icon(
+                  Icons.storefront_rounded,
+                  color: primaryGreen,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      store.name.isEmpty ? "Do'kon" : store.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: primaryGreen,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      store.description.isEmpty
+                          ? 'Tavsif yo‘q'
+                          : store.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: primaryGreen.withValues(alpha: 0.68),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: primaryGreen.withValues(alpha: 0.7),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

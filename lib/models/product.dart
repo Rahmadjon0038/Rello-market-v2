@@ -1,6 +1,7 @@
 import 'package:hello_flutter_app/config/api_config.dart';
 import 'package:hello_flutter_app/models/category.dart';
 import 'package:hello_flutter_app/models/seller.dart';
+import 'package:hello_flutter_app/models/store_summary.dart';
 
 class Product {
   final String id;
@@ -19,6 +20,8 @@ class Product {
   final bool isCart;
   final int cartQty;
   final List<String> images;
+  final String storeId;
+  final StoreSummary? store;
   final Seller? seller;
 
   const Product({
@@ -38,6 +41,8 @@ class Product {
     required this.isCart,
     required this.cartQty,
     required this.images,
+    required this.storeId,
+    required this.store,
     required this.seller,
   });
 
@@ -63,6 +68,11 @@ class Product {
     final seller = rawSeller is Map<String, dynamic>
         ? Seller.fromJson(rawSeller)
         : null;
+    final rawStore = json['store'];
+    final store = rawStore is Map<String, dynamic>
+        ? StoreSummary.fromJson(rawStore)
+        : null;
+    final storeId = json['storeId']?.toString() ?? store?.id ?? '';
 
     return Product(
       id: json['id']?.toString() ?? '',
@@ -83,6 +93,8 @@ class Product {
       isCart: json['isCart'] is bool ? json['isCart'] as bool : false,
       cartQty: _intFromJson(json['cartQty']),
       images: images.isEmpty ? [imagePath] : images,
+      storeId: storeId,
+      store: store,
       seller: seller,
     );
   }
@@ -94,6 +106,8 @@ class Product {
     int? qty,
     bool? selected,
     Seller? seller,
+    String? storeId,
+    StoreSummary? store,
   }) {
     return Product(
       id: id,
@@ -112,6 +126,8 @@ class Product {
       isCart: isCart ?? this.isCart,
       cartQty: cartQty ?? this.cartQty,
       images: images,
+      storeId: storeId ?? this.storeId,
+      store: store ?? this.store,
       seller: seller ?? this.seller,
     );
   }
