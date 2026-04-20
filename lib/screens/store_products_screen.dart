@@ -4,6 +4,7 @@ import 'package:hello_flutter_app/models/category.dart';
 import 'package:hello_flutter_app/models/product.dart';
 import 'package:hello_flutter_app/models/store_summary.dart';
 import 'package:hello_flutter_app/screens/product_detail_screen.dart';
+import 'package:hello_flutter_app/screens/public_store_detail_screen.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/product_api_service.dart';
 import 'package:hello_flutter_app/widgets/product_card.dart';
@@ -26,18 +27,27 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
   bool _isLoading = true;
   String? _error;
   bool _isSeller = false;
+  bool _canManageStore = false;
+  AuthSession? _session;
 
   @override
   void initState() {
     super.initState();
-    _loadRole();
-    _load();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await _loadRole();
+    await _load();
   }
 
   Future<void> _loadRole() async {
     final session = await _authApi.loadSavedSession();
     if (!mounted) return;
-    setState(() => _isSeller = session?.role == 'seller');
+    setState(() {
+      _session = session;
+      _isSeller = session?.role == 'seller';
+    });
   }
 
   Future<void> _load() async {
@@ -47,10 +57,16 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
     });
     try {
       final response = await _productApi.getStoreProducts(widget.storeId);
+      final canManage =
+          _isSeller &&
+          (_session?.phone.isNotEmpty == true) &&
+          (response.store.director?.phone.isNotEmpty == true) &&
+          (response.store.director!.phone == _session!.phone);
       if (!mounted) return;
       setState(() {
         _store = response.store;
         _products = response.products;
+        _canManageStore = canManage;
         _isLoading = false;
       });
     } on AuthApiException catch (error) {
@@ -72,6 +88,19 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ProductDetailScreen(productId: product.id),
+      ),
+    );
+    if (!mounted) return;
+    _load();
+  }
+
+  Future<void> _openStoreDetails() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PublicStoreDetailScreen(
+          storeId: widget.storeId,
+          initialStore: _store,
+        ),
       ),
     );
     if (!mounted) return;
@@ -144,6 +173,10 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
   }
 
   Future<void> _openCreateProduct() async {
+    if (!_canManageStore) {
+      _showSnack("Bu do'konga mahsulot qo'sha olmaysiz");
+      return;
+    }
     final created = await showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
@@ -177,7 +210,7 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         actions: [
-          if (_isSeller)
+          if (_canManageStore)
             IconButton(
               onPressed: _openCreateProduct,
               icon: const Icon(Icons.add_box_rounded),
@@ -185,7 +218,7 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
             ),
         ],
       ),
-      floatingActionButton: _isSeller
+      floatingActionButton: _canManageStore
           ? FloatingActionButton.extended(
               onPressed: _openCreateProduct,
               backgroundColor: primaryGreen,
@@ -210,7 +243,11 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   children: [
-                    if (_store != null) _StoreHeader(store: _store!),
+                    if (_store != null)
+                      _StoreHeader(
+                        store: _store!,
+                        onDetailsTap: _openStoreDetails,
+                      ),
                     const SizedBox(height: 18),
                     const Text(
                       'Mahsulotlar',
@@ -220,6 +257,17 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
+                    if (_isSeller && !_canManageStore) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        "Siz bu do'konga mahsulot qo'sha olmaysiz",
+                        style: TextStyle(
+                          color: primaryGreen.withValues(alpha: 0.65),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     if (_products.isEmpty)
                       _StoreState(
@@ -258,8 +306,9 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
 
 class _StoreHeader extends StatelessWidget {
   final StoreSummary store;
+  final VoidCallback onDetailsTap;
 
-  const _StoreHeader({required this.store});
+  const _StoreHeader({required this.store, required this.onDetailsTap});
 
   @override
   Widget build(BuildContext context) {
@@ -273,53 +322,88 @@ class _StoreHeader extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: primaryGreen.withValues(alpha: 0.12)),
       ),
-      child: Row(
+      child: Column(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: Container(
-              width: 60,
-              height: 60,
-              color: Colors.white,
-              child: imageUrl.isEmpty
-                  ? const Icon(Icons.storefront_rounded, color: primaryGreen)
-                  : Image.network(
-                      Product.resolveImagePath(imageUrl),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(
-                        Icons.storefront_rounded,
-                        color: primaryGreen,
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  width: 60,
+                  height: 60,
+                  color: Colors.white,
+                  child: imageUrl.isEmpty
+                      ? const Icon(
+                          Icons.storefront_rounded,
+                          color: primaryGreen,
+                        )
+                      : Image.network(
+                          Product.resolveImagePath(imageUrl),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Icon(
+                                Icons.storefront_rounded,
+                                color: primaryGreen,
+                              ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Do'kon",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Color(0xFF6F8982),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-            ),
+                    const SizedBox(height: 4),
+                    Text(
+                      store.name.isEmpty ? "Do'kon" : store.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: primaryGreen,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      store.activityType.isEmpty ? "-" : store.activityType,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: primaryGreen.withValues(alpha: 0.7),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  store.name.isEmpty ? "Do'kon" : store.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: primaryGreen,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  store.activityType.isEmpty ? "—" : store.activityType,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: primaryGreen.withValues(alpha: 0.7),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: onDetailsTap,
+              icon: const Icon(Icons.info_outline_rounded, size: 18),
+              label: const Text("Do'kon ma'lumotlari"),
+              style: TextButton.styleFrom(
+                foregroundColor: primaryGreen,
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 34),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textStyle: const TextStyle(fontWeight: FontWeight.w900),
+              ),
             ),
           ),
         ],

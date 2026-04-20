@@ -38,6 +38,29 @@ const Map<String, IconData> categoryIcons = {
   'appliances': Icons.blender_rounded,
 };
 
+const Map<String, String> categoryIconLabelsUz = {
+  'kitchen': 'Oshxona',
+  'phone': 'Telefon',
+  'laptop': 'Noutbuk',
+  'clothes': 'Kiyim',
+  'home': 'Uy',
+  'beauty': 'Go‘zallik',
+  'sport': 'Sport',
+  'car': 'Avto',
+  'book': 'Kitob',
+  'toy': 'O‘yinchoq',
+  'health': 'Sog‘liq',
+  'grocery': 'Oziq-ovqat',
+  'furniture': 'Mebel',
+  'tools': 'Asboblar',
+  'gift': 'Sovg‘a',
+  'appliances': 'Texnika',
+};
+
 IconData categoryIconOf(String? key) {
   return categoryIcons[key] ?? Icons.category_rounded;
+}
+
+String categoryIconLabelOf(String? key) {
+  return categoryIconLabelsUz[key] ?? 'Kategoriya';
 }

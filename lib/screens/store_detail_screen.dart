@@ -1,13 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hello_flutter_app/config/api_config.dart';
 import 'package:hello_flutter_app/models/store.dart';
 import 'package:hello_flutter_app/models/store_details.dart';
 import 'package:hello_flutter_app/screens/orders_screen.dart';
+import 'package:hello_flutter_app/screens/seller_product_management_screen.dart';
 import 'package:hello_flutter_app/screens/store_statistics_screen.dart';
-import 'package:hello_flutter_app/screens/store_products_screen.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/store_api_service.dart';
+import 'package:image_picker/image_picker.dart';
 
 class StoreDetailScreen extends StatefulWidget {
   final String storeId;
@@ -95,11 +98,22 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     return buf.toString();
   }
 
+  String _serviceTypeValue(String raw) {
+    final v = raw.trim().toLowerCase();
+    return switch (v) {
+      'online' => 'Onlayn',
+      'offline' => 'Oflayn',
+      'both' => 'Onlayn va oflayn',
+      _ => raw.trim(),
+    };
+  }
+
   String? _absoluteUrl(String pathOrUrl) {
     final value = pathOrUrl.trim();
     if (value.isEmpty) return null;
-    if (value.startsWith('http://') || value.startsWith('https://'))
+    if (value.startsWith('http://') || value.startsWith('https://')) {
       return value;
+    }
     final base = ApiConfig.baseUrl.replaceAll(RegExp(r'/+$'), '');
     final path = value.startsWith('/') ? value : '/$value';
     return '$base$path';
@@ -201,6 +215,35 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     );
   }
 
+  Future<void> _openEditStore() async {
+    final store = _store;
+    if (store == null) return;
+
+    final updated = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (context) {
+        return _EditStoreSheet(store: store, storeApi: _storeApi);
+      },
+    );
+
+    if (!mounted) return;
+    if (updated == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Do'kon ma'lumotlari yangilandi"),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      _load();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
@@ -211,42 +254,9 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
       backgroundColor: bg,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _navIndex,
-        onDestinationSelected: (index) async {
-          if (index == 0) {
-            Navigator.of(context).popUntil((route) => route.isFirst);
-            return;
-          }
-
+        onDestinationSelected: (index) {
+          if (!mounted) return;
           setState(() => _navIndex = index);
-
-          if (index == 1) {
-            await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => StoreProductsScreen(storeId: widget.storeId),
-              ),
-            );
-            if (mounted) setState(() => _navIndex = 0);
-            return;
-          }
-
-          if (index == 2) {
-            await Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const OrdersScreen()));
-            if (mounted) setState(() => _navIndex = 0);
-            return;
-          }
-
-          if (index == 3) {
-            await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) =>
-                    StoreStatisticsScreen(storeName: _store?.name ?? ''),
-              ),
-            );
-            if (mounted) setState(() => _navIndex = 0);
-            return;
-          }
         },
         indicatorColor: const Color(0xFFE6F4EF),
         backgroundColor: Colors.white,
@@ -254,7 +264,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
           NavigationDestination(
             icon: Icon(Icons.home_outlined, color: ink),
             selectedIcon: Icon(Icons.home_rounded, color: primaryGreen),
-            label: 'Bosh sahifa',
+            label: "Do'kon",
           ),
           NavigationDestination(
             icon: Icon(Icons.inventory_2_outlined, color: ink),
@@ -273,205 +283,833 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: primaryGreen),
-              )
-            : _error != null
-            ? _StateCard(message: _error!, onRetry: _load)
-            : _store == null
-            ? _StateCard(message: "Do'kon topilmadi", onRetry: _load)
-            : CustomScrollView(
-                slivers: [
-                  SliverAppBar(
-                    pinned: true,
-                    elevation: 0,
-                    backgroundColor: Colors.transparent,
-                    foregroundColor: primaryGreen,
-                    systemOverlayStyle: SystemUiOverlayStyle.light,
-                    surfaceTintColor: Colors.transparent,
-                    scrolledUnderElevation: 0,
-                    title: const SizedBox.shrink(),
-                    leading: _AppBarCircleButton(
-                      icon: Icons.arrow_back_rounded,
-                      onTap: () => Navigator.of(context).pop(),
-                    ),
-                    actions: [
-                      Padding(
-                        padding: const EdgeInsets.only(right: 10),
-                        child: _AppBarCircleButton(
-                          icon: Icons.refresh_rounded,
-                          onTap: _load,
-                        ),
-                      ),
-                    ],
-                    expandedHeight: 240,
-                    flexibleSpace: FlexibleSpaceBar(
-                      background: _HeaderHero(
-                        title: _store!.name,
-                        subtitle: (_store!.description ?? '').trim(),
-                        imageUrl: _absoluteUrl(_store!.imagePath ?? ''),
-                        storeType: (_store!.storeType ?? '').trim(),
-                        isActive: _store!.isActive,
-                      ),
-                    ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _ContactCard(
-                            address: (_store!.address ?? '').trim(),
-                            phone: (_store!.director?.phone ?? '').trim(),
-                            mapLink: (_store!.mapLocation ?? '').trim(),
-                            onCopyAddress: () =>
-                                _copy('Manzil', (_store!.address ?? '').trim()),
-                            onCopyPhone: () => _copy(
-                              'Telefon',
-                              (_store!.director?.phone ?? '').trim(),
-                            ),
-                            onShowMap: () => _showLink(
-                              'Google Map link',
-                              _store!.mapLocation,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _SectionCard(
-                            title: "Asosiy ma'lumotlar",
-                            child: Column(
-                              children: [
-                                _KeyValue(
-                                  label: 'Holati',
-                                  value: _store!.isActive ? 'Faol' : 'Nofaol',
-                                ),
-                                _KeyValue(
-                                  label: "Do'kon turi",
-                                  value: (_store!.storeType ?? '-').trim(),
-                                ),
-                                _KeyValue(
-                                  label: "Faoliyat yo'nalishi",
-                                  value: (_store!.activityType ?? '-').trim(),
-                                ),
-                                _KeyValue(
-                                  label: "Ish vaqti",
-                                  value: (_store!.workingHours ?? '-').trim(),
-                                ),
-                                _KeyValue(
-                                  label: "Yaratilgan",
-                                  value: _formatDateTime(
-                                    _store!.createdAt ?? '',
-                                  ),
-                                ),
-                                _KeyValue(
-                                  label: "Yangilangan",
-                                  value: _formatDateTime(
-                                    _store!.updatedAt ?? '',
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _ExpandableCard(
-                            title: "Yetkazib berish",
-                            subtitle: _store!.hasDelivery
-                                ? 'Mavjud'
-                                : "Mavjud emas",
-                            child: Column(
-                              children: [
-                                _KeyValue(
-                                  label: 'Holati',
-                                  value: _store!.hasDelivery ? 'Ha' : "Yo'q",
-                                ),
-                                if (_store!.hasDelivery) ...[
-                                  _KeyValue(
-                                    label: 'Hudud',
-                                    value: (_store!.deliveryArea ?? '-').trim(),
-                                  ),
-                                  _KeyValue(
-                                    label: 'Narx',
-                                    value:
-                                        '${_formatMoney(_store!.deliveryPrice)} so‘m',
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _SectionCard(
-                            title: "Rahbar",
-                            child: Column(
-                              children: [
-                                _KeyValue(
-                                  label: 'Ism',
-                                  value: _store!.director == null
-                                      ? '-'
-                                      : '${_store!.director!.firstName} ${_store!.director!.lastName}'
-                                            .trim(),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _SectionCard(
-                            title: "Rasmlar",
-                            child: _ImageStrip(
-                              urls: [
-                                ...[
-                                  _absoluteUrl(_store!.imagePath ?? ''),
-                                  ..._store!.bannerImages.map(_absoluteUrl),
-                                ].whereType<String>(),
-                              ],
-                              onTap: _showImage,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: primaryGreen))
+          : _error != null
+          ? _StateCard(message: _error!, onRetry: _load)
+          : _store == null
+          ? _StateCard(message: "Do'kon topilmadi", onRetry: _load)
+          : IndexedStack(
+              index: _navIndex,
+              children: [
+                _StoreOverviewTab(
+                  store: _store!,
+                  onBack: () => Navigator.of(context).pop(),
+                  onEdit: _openEditStore,
+                  onRefresh: _load,
+                  absoluteUrl: _absoluteUrl,
+                  formatDateTime: _formatDateTime,
+                  formatMoney: _formatMoney,
+                  serviceTypeValue: _serviceTypeValue,
+                  onCopy: _copy,
+                  onShowLink: _showLink,
+                  onShowImage: _showImage,
+                ),
+                SellerProductManagementScreen(storeId: widget.storeId),
+                const OrdersScreen(),
+                StoreStatisticsScreen(storeName: _store!.name),
+              ],
+            ),
     );
   }
 }
 
-class _DetailRow extends StatelessWidget {
-  final String title;
-  final String value;
+class _StoreOverviewTab extends StatelessWidget {
+  final StoreDetails store;
+  final VoidCallback onBack;
+  final VoidCallback onEdit;
+  final VoidCallback onRefresh;
+  final String? Function(String) absoluteUrl;
+  final String Function(String) formatDateTime;
+  final String Function(num?) formatMoney;
+  final String Function(String) serviceTypeValue;
+  final Future<void> Function(String label, String value) onCopy;
+  final void Function(String title, String? link) onShowLink;
+  final void Function(String url) onShowImage;
 
-  const _DetailRow({required this.title, required this.value});
+  const _StoreOverviewTab({
+    required this.store,
+    required this.onBack,
+    required this.onEdit,
+    required this.onRefresh,
+    required this.absoluteUrl,
+    required this.formatDateTime,
+    required this.formatMoney,
+    required this.serviceTypeValue,
+    required this.onCopy,
+    required this.onShowLink,
+    required this.onShowImage,
+  });
 
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: primaryGreen.withValues(alpha: 0.62),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+    return CustomScrollView(
+      slivers: [
+        SliverAppBar(
+          pinned: true,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          foregroundColor: primaryGreen,
+          systemOverlayStyle: SystemUiOverlayStyle.light,
+          surfaceTintColor: Colors.transparent,
+          scrolledUnderElevation: 0,
+          title: const SizedBox.shrink(),
+          leading: _AppBarCircleButton(
+            icon: Icons.arrow_back_rounded,
+            onTap: onBack,
+          ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _AppBarCircleButton(
+                icon: Icons.edit_rounded,
+                onTap: onEdit,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: _AppBarCircleButton(
+                icon: Icons.refresh_rounded,
+                onTap: onRefresh,
+              ),
+            ),
+          ],
+          expandedHeight: 240,
+          flexibleSpace: FlexibleSpaceBar(
+            background: _HeaderHero(
+              title: store.name,
+              subtitle: (store.description ?? '').trim(),
+              imageUrl: absoluteUrl(store.imagePath ?? ''),
+              storeType: serviceTypeValue(store.storeType ?? ''),
+              isActive: store.isActive,
+              isNew: store.isNew,
+              newBadgeText: store.newBadgeText,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            value.trim().isEmpty ? '-' : value,
-            style: const TextStyle(
-              color: primaryGreen,
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _OwnerStoreSummaryCard(
+                  name: store.name,
+                  description: (store.description ?? '').trim(),
+                  activityType: (store.activityType ?? '').trim(),
+                ),
+                const SizedBox(height: 12),
+                _QuickInfoGrid(
+                  items: [
+                    _QuickInfoItem(
+                      icon: Icons.schedule_rounded,
+                      label: 'Ish vaqti',
+                      value: (store.workingHours ?? '').trim(),
+                    ),
+                    _QuickInfoItem(
+                      icon: Icons.local_shipping_rounded,
+                      label: 'Yetkazish',
+                      value: store.hasDelivery ? 'Mavjud' : "Mavjud emas",
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _SectionCard(
+                  title: "Do'kon profili",
+                  child: Column(
+                    children: [
+                      _KeyValue(
+                        label: "Do'kon turi",
+                        value: serviceTypeValue(
+                          (store.storeType ?? '-').trim(),
+                        ),
+                      ),
+                      _KeyValue(
+                        label: "Faoliyat yo'nalishi",
+                        value: (store.activityType ?? '-').trim(),
+                      ),
+                      _KeyValue(
+                        label: "Ish vaqti",
+                        value: (store.workingHours ?? '-').trim(),
+                      ),
+                      _KeyValue(
+                        label: "Yaratilgan",
+                        value: formatDateTime(store.createdAt ?? ''),
+                      ),
+                      _KeyValue(
+                        label: "Yangilangan",
+                        value: formatDateTime(store.updatedAt ?? ''),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _SectionCard(
+                  title: "Yetkazib berish",
+                  child: Column(
+                    children: [
+                      _KeyValue(
+                        label: 'Holati',
+                        value: store.hasDelivery ? 'Mavjud' : "Mavjud emas",
+                      ),
+                      if (store.hasDelivery) ...[
+                        _KeyValue(
+                          label: 'Hudud',
+                          value: (store.deliveryArea ?? '-').trim(),
+                        ),
+                        _KeyValue(
+                          label: 'Narx',
+                          value: "${formatMoney(store.deliveryPrice)} so'm",
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _SectionCard(
+                  title: "Rahbar va aloqa",
+                  child: Column(
+                    children: [
+                      _KeyValue(
+                        label: 'Ism',
+                        value: store.director == null
+                            ? '-'
+                            : '${store.director!.firstName} ${store.director!.lastName}'
+                                  .trim(),
+                      ),
+                      _KeyValue(
+                        label: 'Telefon',
+                        value: (store.director?.phone ?? '-').trim(),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _ContactCard(
+                  address: (store.address ?? '').trim(),
+                  mapLink: (store.mapLocation ?? '').trim(),
+                  onCopyAddress: () =>
+                      onCopy('Manzil', (store.address ?? '').trim()),
+                  onShowMap: () =>
+                      onShowLink('Google Map link', store.mapLocation),
+                ),
+                const SizedBox(height: 12),
+                _SectionCard(
+                  title: "Rasmlar",
+                  child: _ImageStrip(
+                    urls: [
+                      ...[
+                        absoluteUrl(store.imagePath ?? ''),
+                        ...store.bannerImages.map(absoluteUrl),
+                      ].whereType<String>(),
+                    ],
+                    onTap: onShowImage,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EditStoreSheet extends StatefulWidget {
+  final StoreDetails store;
+  final StoreApiService storeApi;
+
+  const _EditStoreSheet({required this.store, required this.storeApi});
+
+  @override
+  State<_EditStoreSheet> createState() => _EditStoreSheetState();
+}
+
+class _EditStoreSheetState extends State<_EditStoreSheet> {
+  static const _primaryGreen = Color(0xFF1F5A50);
+  static const _muted = Color(0xFF6F8982);
+  static const _surface = Color(0xFFF7F8FA);
+  static const _line = Color(0xFFD8E5E1);
+
+  final ImagePicker _picker = ImagePicker();
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _descriptionCtrl;
+  late final TextEditingController _activityCtrl;
+  late final TextEditingController _addressCtrl;
+  late final TextEditingController _mapCtrl;
+  late final TextEditingController _hoursCtrl;
+  late final TextEditingController _deliveryAreaCtrl;
+  late final TextEditingController _deliveryPriceCtrl;
+  late String _storeType;
+  late bool _hasDelivery;
+  File? _logoFile;
+  List<File> _bannerFiles = const [];
+  bool _isSubmitting = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final store = widget.store;
+    _nameCtrl = TextEditingController(text: store.name);
+    _descriptionCtrl = TextEditingController(text: store.description ?? '');
+    _activityCtrl = TextEditingController(text: store.activityType ?? '');
+    _addressCtrl = TextEditingController(text: store.address ?? '');
+    _mapCtrl = TextEditingController(text: store.mapLocation ?? '');
+    _hoursCtrl = TextEditingController(text: store.workingHours ?? '');
+    _deliveryAreaCtrl = TextEditingController(text: store.deliveryArea ?? '');
+    _deliveryPriceCtrl = TextEditingController(
+      text: store.deliveryPrice?.toStringAsFixed(0) ?? '',
+    );
+    _storeType = _normalizeStoreType(store.storeType ?? 'both');
+    _hasDelivery = store.hasDelivery;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _descriptionCtrl.dispose();
+    _activityCtrl.dispose();
+    _addressCtrl.dispose();
+    _mapCtrl.dispose();
+    _hoursCtrl.dispose();
+    _deliveryAreaCtrl.dispose();
+    _deliveryPriceCtrl.dispose();
+    super.dispose();
+  }
+
+  String _normalizeStoreType(String value) {
+    final v = value.trim().toLowerCase();
+    if (v == 'online' || v == 'offline' || v == 'both') return v;
+    return 'both';
+  }
+
+  Future<void> _pickLogo() async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _logoFile = File(picked.path);
+      _error = null;
+    });
+  }
+
+  Future<void> _pickBanners() async {
+    final picked = await _picker.pickMultiImage(imageQuality: 85);
+    if (picked.isEmpty || !mounted) return;
+    setState(() {
+      _bannerFiles = picked.map((item) => File(item.path)).toList();
+      _error = null;
+    });
+  }
+
+  String? _validate() {
+    if (_nameCtrl.text.trim().isEmpty) return "Do'kon nomini kiriting";
+    if (_descriptionCtrl.text.trim().isEmpty) {
+      return "Do'kon tavsifini kiriting";
+    }
+    if (_activityCtrl.text.trim().isEmpty) return "Faoliyat turini kiriting";
+    if (_mapCtrl.text.trim().isEmpty) return "Xarita linkini kiriting";
+    if (_hoursCtrl.text.trim().isEmpty) return "Ish vaqtini kiriting";
+    if ((_storeType == 'offline' || _storeType == 'both') &&
+        _addressCtrl.text.trim().isEmpty) {
+      return "Offline do'kon uchun manzil majburiy";
+    }
+    if (_hasDelivery) {
+      if (_deliveryAreaCtrl.text.trim().isEmpty) {
+        return "Yetkazib berish hududini kiriting";
+      }
+      final price = num.tryParse(_deliveryPriceCtrl.text.trim());
+      if (price == null || price < 0) {
+        return "Yetkazib berish narxi 0 yoki undan katta bo'lishi kerak";
+      }
+    }
+    return null;
+  }
+
+  Future<void> _submit() async {
+    final validation = _validate();
+    if (validation != null) {
+      setState(() => _error = validation);
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+    });
+
+    final fields = <String, dynamic>{
+      'storeName': _nameCtrl.text.trim(),
+      'storeDescription': _descriptionCtrl.text.trim(),
+      'storeType': _storeType,
+      'activityType': _activityCtrl.text.trim(),
+      'storeAddress': _addressCtrl.text.trim(),
+      'storeMapLocation': _mapCtrl.text.trim(),
+      'workingHours': _hoursCtrl.text.trim(),
+      'hasDelivery': _hasDelivery,
+      if (_hasDelivery) 'deliveryArea': _deliveryAreaCtrl.text.trim(),
+      if (_hasDelivery)
+        'deliveryPrice': num.tryParse(_deliveryPriceCtrl.text.trim()) ?? 0,
+    };
+
+    try {
+      await widget.storeApi.updateStore(
+        widget.store.id,
+        fields: fields,
+        storeLogoFile: _logoFile,
+        storeBannerImageFiles: _bannerFiles,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.message);
+    } on Object {
+      if (!mounted) return;
+      setState(() => _error = "Do'kon ma'lumotlarini yangilab bo'lmadi");
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  InputDecoration _inputDecoration(String label) {
+    OutlineInputBorder border(Color color, {double width = 1}) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
+
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(
+        color: _muted,
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+      ),
+      floatingLabelStyle: const TextStyle(
+        color: _primaryGreen,
+        fontSize: 13,
+        fontWeight: FontWeight.w900,
+      ),
+      filled: true,
+      fillColor: _surface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: border(_line),
+      disabledBorder: border(_line.withValues(alpha: 0.72)),
+      focusedBorder: border(_primaryGreen, width: 1.4),
+      errorBorder: border(Colors.redAccent.withValues(alpha: 0.7)),
+      focusedErrorBorder: border(Colors.redAccent, width: 1.4),
+    );
+  }
+
+  TextStyle get _fieldStyle {
+    return const TextStyle(
+      color: _primaryGreen,
+      fontSize: 14,
+      fontWeight: FontWeight.w800,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return SafeArea(
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: FractionallySizedBox(
+          heightFactor: 0.92,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 2, 8, 10),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        "Do'konni tahrirlash",
+                        style: TextStyle(
+                          color: _primaryGreen,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _isSubmitting
+                          ? null
+                          : () => Navigator.of(context).pop(false),
+                      icon: const Icon(Icons.close_rounded),
+                      color: _primaryGreen,
+                      tooltip: 'Yopish',
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+                  children: [
+                    if (_error != null) ...[
+                      _EditError(message: _error!),
+                      const SizedBox(height: 12),
+                    ],
+                    _EditSectionTitle(title: "Asosiy ma'lumotlar"),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _nameCtrl,
+                      enabled: !_isSubmitting,
+                      cursorColor: _primaryGreen,
+                      textCapitalization: TextCapitalization.words,
+                      style: _fieldStyle,
+                      decoration: _inputDecoration("Do'kon nomi"),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _descriptionCtrl,
+                      enabled: !_isSubmitting,
+                      minLines: 3,
+                      maxLines: 5,
+                      cursorColor: _primaryGreen,
+                      textCapitalization: TextCapitalization.sentences,
+                      style: _fieldStyle.copyWith(height: 1.35),
+                      decoration: _inputDecoration("Do'kon tavsifi"),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: _storeType,
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'online',
+                          child: Text('Online'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'offline',
+                          child: Text('Offline'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'both',
+                          child: Text('Ikkalasi'),
+                        ),
+                      ],
+                      onChanged: _isSubmitting
+                          ? null
+                          : (value) {
+                              if (value == null) return;
+                              setState(() => _storeType = value);
+                            },
+                      decoration: _inputDecoration("Do'kon turi"),
+                      dropdownColor: Colors.white,
+                      style: _fieldStyle,
+                      iconEnabledColor: _primaryGreen,
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _activityCtrl,
+                      enabled: !_isSubmitting,
+                      cursorColor: _primaryGreen,
+                      textCapitalization: TextCapitalization.words,
+                      style: _fieldStyle,
+                      decoration: _inputDecoration("Faoliyat turi"),
+                    ),
+                    const SizedBox(height: 16),
+                    _EditSectionTitle(title: "Manzil va ish vaqti"),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _addressCtrl,
+                      enabled: !_isSubmitting,
+                      minLines: 2,
+                      maxLines: 4,
+                      cursorColor: _primaryGreen,
+                      textCapitalization: TextCapitalization.sentences,
+                      style: _fieldStyle.copyWith(height: 1.35),
+                      decoration: _inputDecoration("Do'kon manzili"),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _mapCtrl,
+                      enabled: !_isSubmitting,
+                      cursorColor: _primaryGreen,
+                      keyboardType: TextInputType.url,
+                      style: _fieldStyle,
+                      decoration: _inputDecoration("Xarita linki"),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _hoursCtrl,
+                      enabled: !_isSubmitting,
+                      cursorColor: _primaryGreen,
+                      style: _fieldStyle,
+                      decoration: _inputDecoration(
+                        "Ish vaqti",
+                      ).copyWith(hintText: '09:00-21:00'),
+                    ),
+                    const SizedBox(height: 16),
+                    _DeliveryEditor(
+                      hasDelivery: _hasDelivery,
+                      onChanged: _isSubmitting
+                          ? null
+                          : (value) => setState(() => _hasDelivery = value),
+                    ),
+                    if (_hasDelivery) ...[
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _deliveryAreaCtrl,
+                        enabled: !_isSubmitting,
+                        cursorColor: _primaryGreen,
+                        textCapitalization: TextCapitalization.sentences,
+                        style: _fieldStyle,
+                        decoration: _inputDecoration("Yetkazish hududi"),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _deliveryPriceCtrl,
+                        enabled: !_isSubmitting,
+                        cursorColor: _primaryGreen,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        style: _fieldStyle,
+                        decoration: _inputDecoration("Yetkazish narxi"),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    _EditSectionTitle(title: 'Rasmlar'),
+                    const SizedBox(height: 10),
+                    _ImagePickRow(
+                      title: 'Logo',
+                      subtitle: _logoFile == null
+                          ? 'Yangi logo tanlanmagan'
+                          : _logoFile!.path.split(Platform.pathSeparator).last,
+                      icon: Icons.image_rounded,
+                      onTap: _isSubmitting ? null : _pickLogo,
+                    ),
+                    const SizedBox(height: 10),
+                    _ImagePickRow(
+                      title: 'Banner rasmlar',
+                      subtitle: _bannerFiles.isEmpty
+                          ? 'Yangi banner tanlanmagan'
+                          : '${_bannerFiles.length} ta rasm tanlandi',
+                      icon: Icons.collections_rounded,
+                      onTap: _isSubmitting ? null : _pickBanners,
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    top: BorderSide(color: _line.withValues(alpha: 0.8)),
+                  ),
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: _isSubmitting ? null : _submit,
+                    icon: _isSubmitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.save_rounded),
+                    label: Text(
+                      _isSubmitting ? 'Saqlanmoqda' : 'Saqlash',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _primaryGreen,
+                      disabledBackgroundColor: _primaryGreen.withValues(
+                        alpha: 0.65,
+                      ),
+                      foregroundColor: Colors.white,
+                      disabledForegroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EditSectionTitle extends StatelessWidget {
+  final String title;
+
+  const _EditSectionTitle({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: Color(0xFF1F5A50),
+        fontSize: 15,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+  }
+}
+
+class _EditError extends StatelessWidget {
+  final String message;
+
+  const _EditError({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.redAccent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded, color: Colors.redAccent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DeliveryEditor extends StatelessWidget {
+  final bool hasDelivery;
+  final ValueChanged<bool>? onChanged;
+
+  const _DeliveryEditor({required this.hasDelivery, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F8FA),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFD8E5E1)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.local_shipping_rounded, color: primaryGreen),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Yetkazib berish',
+              style: TextStyle(
+                color: primaryGreen,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          Switch(
+            value: hasDelivery,
+            onChanged: onChanged,
+            activeThumbColor: primaryGreen,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImagePickRow extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _ImagePickRow({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+
+    return Material(
+      color: const Color(0xFFF7F8FA),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFD8E5E1)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: primaryGreen),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: primaryGreen,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: primaryGreen.withValues(alpha: 0.65),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: primaryGreen),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -520,170 +1158,14 @@ class _StateCard extends StatelessWidget {
   }
 }
 
-class _ImageDetailRow extends StatelessWidget {
-  final String title;
-  final String? url;
-
-  const _ImageDetailRow({required this.title, required this.url});
-
-  @override
-  Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF1F5A50);
-    final hasUrl = url != null && url!.trim().isNotEmpty;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: primaryGreen.withValues(alpha: 0.62),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (!hasUrl)
-            const Text(
-              '-',
-              style: TextStyle(
-                color: primaryGreen,
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-              ),
-            )
-          else
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Image.network(
-                  url!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: primaryGreen.withValues(alpha: 0.06),
-                    alignment: Alignment.center,
-                    child: const Text(
-                      "Rasm yuklanmadi",
-                      style: TextStyle(
-                        color: primaryGreen,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Container(
-                      color: primaryGreen.withValues(alpha: 0.06),
-                      alignment: Alignment.center,
-                      child: const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ImagesDetailRow extends StatelessWidget {
-  final String title;
-  final List<String> urls;
-
-  const _ImagesDetailRow({required this.title, required this.urls});
-
-  @override
-  Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF1F5A50);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: primaryGreen.withValues(alpha: 0.62),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (urls.isEmpty)
-            const Text(
-              '-',
-              style: TextStyle(
-                color: primaryGreen,
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-              ),
-            )
-          else
-            SizedBox(
-              height: 120,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: urls.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (context, index) {
-                  final url = urls[index];
-                  return ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: Image.network(
-                        url,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: primaryGreen.withValues(alpha: 0.06),
-                          alignment: Alignment.center,
-                          child: const Text(
-                            "Rasm yuklanmadi",
-                            style: TextStyle(
-                              color: primaryGreen,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Container(
-                            color: primaryGreen.withValues(alpha: 0.06),
-                            alignment: Alignment.center,
-                            child: const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _HeaderHero extends StatelessWidget {
   final String title;
   final String subtitle;
   final String? imageUrl;
   final String storeType;
   final bool isActive;
+  final bool isNew;
+  final String? newBadgeText;
 
   const _HeaderHero({
     required this.title,
@@ -691,6 +1173,8 @@ class _HeaderHero extends StatelessWidget {
     required this.imageUrl,
     required this.storeType,
     required this.isActive,
+    required this.isNew,
+    required this.newBadgeText,
   });
 
   @override
@@ -725,6 +1209,32 @@ class _HeaderHero extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text(
+                title.trim().isEmpty ? "Do'kon" : title.trim(),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  height: 1.08,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (subtitle.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  subtitle.trim(),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.86),
+                    fontSize: 13,
+                    height: 1.35,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
               Row(
                 children: [
                   _HeroPill(
@@ -734,8 +1244,15 @@ class _HeaderHero extends StatelessWidget {
                         : Icons.do_not_disturb_on_rounded,
                   ),
                   const SizedBox(width: 8),
-                  if (storeType.trim().isNotEmpty)
-                    _HeroPill(label: storeType, icon: Icons.store_rounded),
+                  if (isNew) ...[
+                    const SizedBox(width: 8),
+                    _HeroPill(
+                      label: (newBadgeText ?? '').trim().isEmpty
+                          ? "Yangi do'kon"
+                          : newBadgeText!.trim(),
+                      icon: Icons.auto_awesome_rounded,
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -828,20 +1345,199 @@ class _AppBarCircleButton extends StatelessWidget {
   }
 }
 
+class _OwnerStoreSummaryCard extends StatelessWidget {
+  final String name;
+  final String description;
+  final String activityType;
+
+  const _OwnerStoreSummaryCard({
+    required this.name,
+    required this.description,
+    required this.activityType,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: primaryGreen.withValues(alpha: 0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  name.trim().isEmpty ? "Do'kon" : name.trim(),
+                  style: const TextStyle(
+                    color: primaryGreen,
+                    fontSize: 21,
+                    height: 1.15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (description.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              description.trim(),
+              style: const TextStyle(
+                color: Color(0xFF42524E),
+                fontSize: 13,
+                height: 1.45,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          if (activityType.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _MetaPill(icon: Icons.category_rounded, label: activityType),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MetaPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _MetaPill({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE6F4EF),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: primaryGreen, size: 15),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: primaryGreen,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickInfoItem {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _QuickInfoItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+}
+
+class _QuickInfoGrid extends StatelessWidget {
+  final List<_QuickInfoItem> items;
+
+  const _QuickInfoGrid({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var i = 0; i < items.length; i++) ...[
+          Expanded(child: _QuickInfoTile(item: items[i])),
+          if (i != items.length - 1) const SizedBox(width: 10),
+        ],
+      ],
+    );
+  }
+}
+
+class _QuickInfoTile extends StatelessWidget {
+  final _QuickInfoItem item;
+
+  const _QuickInfoTile({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+    final value = item.value.trim().isEmpty ? '-' : item.value.trim();
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 92),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: primaryGreen.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(item.icon, color: primaryGreen, size: 22),
+          const SizedBox(height: 10),
+          Text(
+            item.label,
+            style: TextStyle(
+              color: primaryGreen.withValues(alpha: 0.62),
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: primaryGreen,
+              fontSize: 13,
+              height: 1.2,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ContactCard extends StatelessWidget {
   final String address;
-  final String phone;
   final String mapLink;
   final VoidCallback onCopyAddress;
-  final VoidCallback onCopyPhone;
   final VoidCallback onShowMap;
 
   const _ContactCard({
     required this.address,
-    required this.phone,
     required this.mapLink,
     required this.onCopyAddress,
-    required this.onCopyPhone,
     required this.onShowMap,
   });
 
@@ -873,17 +1569,6 @@ class _ContactCard extends StatelessWidget {
               icon: Icons.copy_rounded,
               label: 'Nusxa',
               onTap: address.trim().isEmpty ? null : onCopyAddress,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _ContactRow(
-            icon: Icons.call_rounded,
-            title: 'Telefon',
-            value: phone,
-            action: _ContactAction(
-              icon: Icons.copy_rounded,
-              label: 'Nusxa',
-              onTap: phone.trim().isEmpty ? null : onCopyPhone,
             ),
           ),
           const SizedBox(height: 10),
@@ -1049,77 +1734,11 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-class _ExpandableCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final Widget child;
-
-  const _ExpandableCard({
-    required this.title,
-    required this.subtitle,
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF1F5A50);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: primaryGreen.withValues(alpha: 0.1)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-          title: Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              color: primaryGreen,
-              fontSize: 15,
-            ),
-          ),
-          subtitle: subtitle.trim().isEmpty
-              ? null
-              : Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: primaryGreen.withValues(alpha: 0.62),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-          children: [child],
-        ),
-      ),
-    );
-  }
-}
-
 class _KeyValue extends StatelessWidget {
   final String label;
   final String value;
-  final VoidCallback? onCopy;
-  final VoidCallback? onOpen;
 
-  const _KeyValue({
-    required this.label,
-    required this.value,
-    this.onCopy,
-    this.onOpen,
-  });
+  const _KeyValue({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -1153,17 +1772,6 @@ class _KeyValue extends StatelessWidget {
               ),
             ),
           ),
-          if (onCopy != null || onOpen != null) ...[
-            const SizedBox(width: 8),
-            IconButton(
-              onPressed: onCopy ?? onOpen,
-              icon: Icon(
-                onCopy != null ? Icons.copy_rounded : Icons.open_in_new_rounded,
-              ),
-              color: primaryGreen,
-              tooltip: onCopy != null ? 'Nusxalash' : "Ko'rish",
-            ),
-          ],
         ],
       ),
     );
@@ -1203,7 +1811,7 @@ class _ImageStrip extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: unique.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        separatorBuilder: (context, index) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
           final url = unique[index];
           return Material(

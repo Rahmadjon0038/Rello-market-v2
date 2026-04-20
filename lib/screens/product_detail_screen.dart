@@ -126,6 +126,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
+  void _openFullScreenGallery(List<String> images, int initialIndex) {
+    if (images.isEmpty) return;
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierDismissible: true,
+        barrierColor: Colors.black.withValues(alpha: 0.55),
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return _FullScreenGallery(
+            images: images,
+            initialIndex: initialIndex.clamp(0, images.length - 1),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
@@ -163,14 +180,38 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: SizedBox(
-            height: 260,
-            child: PageView.builder(
-              controller: _imageController,
-              itemCount: images.length,
-              onPageChanged: (index) => setState(() => _imageIndex = index),
-              itemBuilder: (context, index) {
-                return ProductImage(path: images[index], height: 260);
-              },
+            height: 320,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                PageView.builder(
+                  controller: _imageController,
+                  itemCount: images.length,
+                  onPageChanged: (index) => setState(() => _imageIndex = index),
+                  itemBuilder: (context, index) {
+                    return GestureDetector(
+                      onTap: () => _openFullScreenGallery(images, _imageIndex),
+                      child: ProductImage(path: images[index], height: 320),
+                    );
+                  },
+                ),
+                Positioned(
+                  bottom: 10,
+                  right: 10,
+                  child: Material(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    shape: const CircleBorder(),
+                    child: IconButton(
+                      onPressed: images.isEmpty
+                          ? null
+                          : () => _openFullScreenGallery(images, _imageIndex),
+                      icon: const Icon(Icons.fullscreen_rounded),
+                      color: Colors.white,
+                      tooltip: "To'liq ekran",
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -237,13 +278,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             if (product.categoryName.isNotEmpty)
               _InfoChip(
                 icon: Icons.category_rounded,
-                text: product.categoryName,
+                text: 'Kategoriya: ${product.categoryName}',
               ),
             if (product.brand.isNotEmpty)
-              _InfoChip(icon: Icons.sell_rounded, text: product.brand),
+              _InfoChip(
+                icon: Icons.sell_rounded,
+                text: 'Brend: ${product.brand}',
+              ),
             _InfoChip(
               icon: Icons.inventory_2_rounded,
-              text: '${product.qty} ta',
+              text: 'Tovar soni: ${product.qty} ta',
             ),
           ],
         ),
@@ -352,6 +396,17 @@ class _StoreBlock extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
+                      "Do'kon",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: primaryGreen.withValues(alpha: 0.62),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
                       store.name.isEmpty ? "Do'kon" : store.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -368,7 +423,7 @@ class _StoreBlock extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: primaryGreen.withOpacity(0.72),
+                          color: primaryGreen.withValues(alpha: 0.72),
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
@@ -412,12 +467,16 @@ class _InfoChip extends StatelessWidget {
         children: [
           Icon(icon, color: primaryGreen, size: 16),
           const SizedBox(width: 6),
-          Text(
-            text,
-            style: const TextStyle(
-              color: primaryGreen,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: primaryGreen,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -461,6 +520,132 @@ class _DetailError extends StatelessWidget {
               style: TextButton.styleFrom(foregroundColor: primaryGreen),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FullScreenGallery extends StatefulWidget {
+  final List<String> images;
+  final int initialIndex;
+
+  const _FullScreenGallery({required this.images, required this.initialIndex});
+
+  @override
+  State<_FullScreenGallery> createState() => _FullScreenGalleryState();
+}
+
+class _FullScreenGalleryState extends State<_FullScreenGallery> {
+  late final PageController _controller;
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex;
+    _controller = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = widget.images.length;
+    final title = total <= 1 ? 'Rasm' : '${_index + 1}/$total';
+
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: PageView.builder(
+              controller: _controller,
+              itemCount: total,
+              onPageChanged: (i) => setState(() => _index = i),
+              itemBuilder: (context, i) {
+                return InteractiveViewer(
+                  minScale: 0.8,
+                  maxScale: 4,
+                  child: _GalleryImage(path: widget.images[i]),
+                );
+              },
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+              child: Row(
+                children: [
+                  Material(
+                    color: Colors.white.withValues(alpha: 0.14),
+                    shape: const CircleBorder(),
+                    child: IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                      color: Colors.white,
+                      tooltip: 'Yopish',
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GalleryImage extends StatelessWidget {
+  final String path;
+
+  const _GalleryImage({required this.path});
+
+  @override
+  Widget build(BuildContext context) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return SizedBox.expand(
+        child: Image.network(
+          path,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Center(
+            child: Icon(
+              Icons.image_not_supported_rounded,
+              color: Colors.white70,
+              size: 40,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox.expand(
+      child: Image.asset(
+        path,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Center(
+          child: Icon(
+            Icons.image_not_supported_rounded,
+            color: Colors.white70,
+            size: 40,
+          ),
         ),
       ),
     );

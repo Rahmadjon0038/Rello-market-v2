@@ -152,15 +152,27 @@ class _StoreTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      store.name.isEmpty ? "Do'kon" : store.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: primaryGreen,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            store.name.isEmpty ? "Do'kon" : store.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: primaryGreen,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        if (store.isNew) ...[
+                          const SizedBox(width: 8),
+                          _NewStoreBadge(
+                            text: store.newBadgeText ?? "Yangi do'kon",
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -191,6 +203,41 @@ class _StoreTile extends StatelessWidget {
   }
 }
 
+class _NewStoreBadge extends StatelessWidget {
+  final String text;
+
+  const _NewStoreBadge({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFF0F766E);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accent.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.auto_awesome_rounded, color: accent, size: 13),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: const TextStyle(
+              color: accent,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StoresStateCard extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
@@ -213,7 +260,7 @@ class _StoresStateCard extends StatelessWidget {
             message,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              color: primaryGreen,
+              color: Color.fromARGB(255, 90, 31, 46),
               fontWeight: FontWeight.w800,
             ),
           ),

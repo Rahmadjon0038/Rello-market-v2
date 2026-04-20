@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:hello_flutter_app/config/api_config.dart';
 import 'package:hello_flutter_app/models/category.dart';
 import 'package:hello_flutter_app/models/seller_application.dart';
+import 'package:hello_flutter_app/screens/pick_location_screen.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/product_api_service.dart';
 import 'package:hello_flutter_app/services/store_api_service.dart';
 import 'package:hello_flutter_app/widgets/category_icon.dart';
+import 'package:latlong2/latlong.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -78,7 +80,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           const NavigationDestination(
             icon: Icon(Icons.category_outlined, color: ink),
             selectedIcon: Icon(Icons.category_rounded, color: primaryGreen),
-            label: 'Categoriyalar',
+            label: 'Kategoriyalar',
           ),
           NavigationDestination(
             icon: _ApplicationsNavIcon(
@@ -192,7 +194,7 @@ class _AdminCategoriesPageState extends State<_AdminCategoriesPage> {
     } on Object {
       if (!mounted) return;
       setState(() {
-        _error = 'Categoriyalarni yuklab bo‘lmadi';
+        _error = 'Kategoriyalarni yuklab bo‘lmadi';
         _isLoading = false;
       });
     }
@@ -223,7 +225,7 @@ class _AdminCategoriesPageState extends State<_AdminCategoriesPage> {
           backgroundColor: Colors.white,
           title: const Text('Kategoriyani o‘chirish'),
           content: Text(
-            '"${category.name}" o‘chiriladi. Unga bog‘langan mahsulotlarda category bo‘sh qolishi mumkin.',
+            '"${category.name}" o‘chiriladi. Unga bog‘langan mahsulotlarda kategoriya bo‘sh qolishi mumkin.',
           ),
           actions: [
             TextButton(
@@ -277,10 +279,10 @@ class _AdminCategoriesPageState extends State<_AdminCategoriesPage> {
             children: [
               const Expanded(
                 child: Text(
-                  'Categoriyalar',
+                  'Kategoriyalar',
                   style: TextStyle(
                     color: primaryGreen,
-                    fontSize: 22,
+                    fontSize: 18,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -307,7 +309,7 @@ class _AdminCategoriesPageState extends State<_AdminCategoriesPage> {
             _AdminStateCard(message: _error!, onRetry: _loadCategories)
           else if (_categories.isEmpty)
             _AdminStateCard(
-              message: 'Categoriyalar topilmadi',
+              message: 'Kategoriyalar topilmadi',
               onRetry: _loadCategories,
             )
           else
@@ -388,7 +390,7 @@ class _CategoryAdminTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  category.icon.isEmpty ? 'category' : category.icon,
+                  categoryIconLabelOf(category.icon),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -539,7 +541,7 @@ class _CategoryFormSheetState extends State<_CategoryFormSheet> {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Icon',
+              'Belgi',
               style: TextStyle(
                 color: primaryGreen,
                 fontSize: 14,
@@ -678,7 +680,7 @@ class _IconKeyOption extends StatelessWidget {
             ),
             const SizedBox(height: 5),
             Text(
-              iconKey,
+              categoryIconLabelOf(iconKey),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -745,6 +747,7 @@ class _AdminStoreRequestsPage extends StatefulWidget {
 
 class _AdminStoreRequestsPageState extends State<_AdminStoreRequestsPage> {
   final StoreApiService _storeApi = StoreApiService();
+  final TextEditingController _searchCtrl = TextEditingController();
   final List<String> _statuses = ['pending', 'approved', 'rejected'];
   String _selectedStatus = 'pending';
   List<SellerApplication> _applications = [];
@@ -754,8 +757,53 @@ class _AdminStoreRequestsPageState extends State<_AdminStoreRequestsPage> {
   @override
   void initState() {
     super.initState();
+    _searchCtrl.addListener(() => setState(() {}));
     _loadApplications();
   }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<SellerApplication> get _filteredApplications {
+    final rawQuery = _searchCtrl.text.trim();
+    final queryText = _normalizeText(rawQuery);
+    final queryPhone = _digitsOnly(rawQuery);
+    final hasTextQuery = queryText.isNotEmpty;
+    final hasPhoneQuery = queryPhone.isNotEmpty;
+    if (!hasTextQuery && !hasPhoneQuery) return _applications;
+    return _applications.where((application) {
+      final textHaystack = _normalizeText(
+        [
+          application.storeName,
+          application.fullName,
+          application.email,
+          application.primaryPhone,
+          application.additionalPhone,
+          application.user?.phone ?? '',
+          application.user?.username ?? '',
+        ].join(' '),
+      );
+      final phoneHaystack = _digitsOnly(
+        [
+          application.primaryPhone,
+          application.additionalPhone,
+          application.user?.phone ?? '',
+          application.user?.username ?? '',
+        ].join(' '),
+      );
+
+      return (hasTextQuery && textHaystack.contains(queryText)) ||
+          (hasPhoneQuery && phoneHaystack.contains(queryPhone));
+    }).toList();
+  }
+
+  String _normalizeText(String value) =>
+      value.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+
+  String _digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
 
   Future<void> _loadApplications() async {
     setState(() {
@@ -800,39 +848,10 @@ class _AdminStoreRequestsPageState extends State<_AdminStoreRequestsPage> {
   }
 
   Future<void> _reject(SellerApplication application) async {
-    final noteCtrl = TextEditingController();
     final note = await showDialog<String>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text('Arizani rad etish'),
-          content: TextField(
-            controller: noteCtrl,
-            minLines: 2,
-            maxLines: 4,
-            decoration: const InputDecoration(
-              labelText: 'Izoh',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Bekor qilish'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(noteCtrl.text),
-              child: const Text(
-                'Rad etish',
-                style: TextStyle(color: Colors.redAccent),
-              ),
-            ),
-          ],
-        );
-      },
+      builder: (context) => const _RejectApplicationDialog(),
     );
-    noteCtrl.dispose();
     if (note == null) return;
 
     try {
@@ -871,6 +890,7 @@ class _AdminStoreRequestsPageState extends State<_AdminStoreRequestsPage> {
     const primaryGreen = Color(0xFF1F5A50);
     const ink = Color(0xFF1F2933);
     const line = Color(0xFFE5E7EB);
+    final filteredApplications = _filteredApplications;
 
     return RefreshIndicator(
       color: primaryGreen,
@@ -884,6 +904,36 @@ class _AdminStoreRequestsPageState extends State<_AdminStoreRequestsPage> {
               color: ink,
               fontSize: 22,
               fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _searchCtrl,
+            cursorColor: primaryGreen,
+            keyboardType: TextInputType.text,
+            decoration: InputDecoration(
+              hintText: "Do'kon nomi yoki telefon raqami",
+              prefixIcon: const Icon(Icons.search_rounded),
+              suffixIcon: _searchCtrl.text.isEmpty
+                  ? null
+                  : IconButton(
+                      onPressed: _searchCtrl.clear,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: line),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: primaryGreen, width: 1.3),
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -929,8 +979,13 @@ class _AdminStoreRequestsPageState extends State<_AdminStoreRequestsPage> {
               message: 'Arizalar topilmadi',
               onRetry: _loadApplications,
             )
+          else if (filteredApplications.isEmpty)
+            _AdminStateCard(
+              message: 'Qidiruv bo‘yicha ariza topilmadi',
+              onRetry: () => setState(_searchCtrl.clear),
+            )
           else
-            ..._applications.map(
+            ...filteredApplications.map(
               (application) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: _ApplicationTile(
@@ -1069,6 +1124,64 @@ class _ApplicationTile extends StatelessWidget {
   }
 }
 
+class _RejectApplicationDialog extends StatefulWidget {
+  const _RejectApplicationDialog();
+
+  @override
+  State<_RejectApplicationDialog> createState() =>
+      _RejectApplicationDialogState();
+}
+
+class _RejectApplicationDialogState extends State<_RejectApplicationDialog> {
+  final TextEditingController _noteCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _noteCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    FocusScope.of(context).unfocus();
+    Navigator.of(context).pop(_noteCtrl.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      title: const Text('Arizani rad etish'),
+      content: TextField(
+        controller: _noteCtrl,
+        minLines: 2,
+        maxLines: 4,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => _submit(),
+        decoration: const InputDecoration(
+          labelText: 'Izoh',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            FocusScope.of(context).unfocus();
+            Navigator.of(context).pop();
+          },
+          child: const Text('Bekor qilish'),
+        ),
+        TextButton(
+          onPressed: _submit,
+          child: const Text(
+            'Rad etish',
+            style: TextStyle(color: Colors.redAccent),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _StatusPill extends StatelessWidget {
   final String status;
 
@@ -1136,14 +1249,68 @@ class _ApplicationDetailsSheet extends StatelessWidget {
         '${_pad2(local.hour)}:${_pad2(local.minute)}';
   }
 
+  String _formatMoney(num value) {
+    final s = value.toStringAsFixed(0);
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      final remaining = s.length - i;
+      b.write(s[i]);
+      if (remaining > 1 && remaining % 3 == 1) b.write(' ');
+    }
+    return "$b so'm";
+  }
+
   String? _absoluteUrl(String pathOrUrl) {
     final value = pathOrUrl.trim();
     if (value.isEmpty) return null;
-    if (value.startsWith('http://') || value.startsWith('https://'))
+    if (value.startsWith('http://') || value.startsWith('https://')) {
       return value;
+    }
     final base = ApiConfig.baseUrl.replaceAll(RegExp(r'/+$'), '');
     final path = value.startsWith('/') ? value : '/$value';
     return '$base$path';
+  }
+
+  LatLng? _latLngFromMapLocation(String value) {
+    final raw = value.trim();
+    if (raw.isEmpty) return null;
+    final match = RegExp(
+      r'(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)',
+    ).firstMatch(raw);
+    if (match == null) return null;
+    final lat = double.tryParse(match.group(1)!);
+    final lng = double.tryParse(match.group(2)!);
+    if (lat == null || lng == null) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return LatLng(lat, lng);
+  }
+
+  void _openMapLocation(BuildContext context, String value) {
+    final point = _latLngFromMapLocation(value);
+    if (point == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Map link ichidan koordinata topilmadi"),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => PickLocationScreen(initial: point)));
+  }
+
+  String _storeTypeLabel(String value) {
+    return switch (value.trim().toLowerCase()) {
+      'online' => 'Online',
+      'offline' => 'Offline',
+      'both' ||
+      'ikkalasi' ||
+      'online/offline' ||
+      'offline/online' => 'Online va offline',
+      _ => value,
+    };
   }
 
   @override
@@ -1208,7 +1375,10 @@ class _ApplicationDetailsSheet extends StatelessWidget {
                   value: _formatDate(application.passportIssuedDate),
                 ),
                 _DetailRow(title: "Do'kon nomi", value: application.storeName),
-                _DetailRow(title: "Do'kon turi", value: application.storeType),
+                _DetailRow(
+                  title: "Do'kon turi",
+                  value: _storeTypeLabel(application.storeType),
+                ),
                 _DetailRow(
                   title: "Faoliyat yo'nalishi",
                   value: application.activityType,
@@ -1221,14 +1391,18 @@ class _ApplicationDetailsSheet extends StatelessWidget {
                   title: "Do'kon manzili",
                   value: application.storeAddress,
                 ),
-                _DetailRow(
+                _MapDetailRow(
                   title: 'Google Map link',
                   value: application.storeMapLocation,
+                  onOpen: () =>
+                      _openMapLocation(context, application.storeMapLocation),
                 ),
                 _DetailRow(title: 'Ish vaqti', value: application.workingHours),
                 _DetailRow(
                   title: 'Yetkazib berish',
-                  value: application.hasDelivery ? 'Ha' : "Yo'q",
+                  value: application.hasDelivery
+                      ? 'Yetkazib berish xizmati bor'
+                      : 'Yetkazib berish xizmati mavjud emas',
                 ),
                 if (application.hasDelivery) ...[
                   _DetailRow(
@@ -1237,7 +1411,7 @@ class _ApplicationDetailsSheet extends StatelessWidget {
                   ),
                   _DetailRow(
                     title: 'Yetkazib berish narxi',
-                    value: application.deliveryPrice.toString(),
+                    value: _formatMoney(application.deliveryPrice),
                   ),
                 ],
                 _ImageDetailRow(
@@ -1252,7 +1426,7 @@ class _ApplicationDetailsSheet extends StatelessWidget {
                       .toList(),
                 ),
                 _DetailRow(
-                  title: 'Yuborilgan vaqt',
+                  title: 'Ariza yuborilgan vaqt',
                   value: _formatDateTime(application.submittedAt),
                 ),
                 if (application.approvedAt.isNotEmpty)
@@ -1306,6 +1480,83 @@ class _DetailRow extends StatelessWidget {
               color: primaryGreen,
               fontSize: 14,
               fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MapDetailRow extends StatelessWidget {
+  final String title;
+  final String value;
+  final VoidCallback onOpen;
+
+  const _MapDetailRow({
+    required this.title,
+    required this.value,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+    final hasValue = value.trim().isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: primaryGreen.withValues(alpha: 0.62),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          InkWell(
+            onTap: hasValue ? onOpen : null,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE6F4EF),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.location_on_rounded,
+                    color: primaryGreen,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      hasValue ? value.trim() : '-',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: primaryGreen,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  if (hasValue) ...[
+                    const SizedBox(width: 8),
+                    const Icon(
+                      Icons.open_in_new_rounded,
+                      color: primaryGreen,
+                      size: 18,
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ],
@@ -1429,7 +1680,7 @@ class _ImagesDetailRow extends StatelessWidget {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: urls.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                separatorBuilder: (context, index) => const SizedBox(width: 10),
                 itemBuilder: (context, index) {
                   final url = urls[index];
                   return ClipRRect(

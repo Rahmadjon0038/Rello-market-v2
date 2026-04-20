@@ -152,6 +152,46 @@ class ProductApiService {
     );
   }
 
+  Future<List<Product>> getMyProducts({
+    String? storeId,
+    String status = 'all',
+  }) async {
+    final params = <String, String>{'status': status};
+    if (storeId != null && storeId.trim().isNotEmpty) {
+      params['storeId'] = storeId.trim();
+    }
+    final query = params.entries
+        .map(
+          (e) =>
+              '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
+        )
+        .join('&');
+    final data = await _send('GET', '/products/me?$query', authRequired: true);
+    return _productsFromData(data);
+  }
+
+  Future<Product> deactivateProduct(String id) async {
+    final data = await _send(
+      'PATCH',
+      '/products/$id/deactivate',
+      authRequired: true,
+    );
+    final raw = data['product'];
+    if (raw is Map<String, dynamic>) return Product.fromJson(raw);
+    return Product.fromJson(data);
+  }
+
+  Future<Product> activateProduct(String id) async {
+    final data = await _send(
+      'PATCH',
+      '/products/$id/activate',
+      authRequired: true,
+    );
+    final raw = data['product'];
+    if (raw is Map<String, dynamic>) return Product.fromJson(raw);
+    return Product.fromJson(data);
+  }
+
   Future<Product> createProduct(Map<String, dynamic> body) async {
     final data = await _send(
       'POST',

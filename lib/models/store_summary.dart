@@ -13,6 +13,8 @@ class StoreSummary {
   final String deliveryArea;
   final num deliveryPrice;
   final List<String> bannerImages;
+  final bool isNew;
+  final String? newBadgeText;
   final Seller? director;
 
   const StoreSummary({
@@ -28,6 +30,8 @@ class StoreSummary {
     required this.deliveryArea,
     required this.deliveryPrice,
     required this.bannerImages,
+    required this.isNew,
+    required this.newBadgeText,
     required this.director,
   });
 
@@ -57,6 +61,8 @@ class StoreSummary {
                 .where((e) => e.trim().isNotEmpty)
                 .toList()
           : const [],
+      isNew: json['isNew'] == true,
+      newBadgeText: json['newBadgeText']?.toString(),
       director: rawDirector is Map<String, dynamic>
           ? Seller.fromJson(rawDirector)
           : null,

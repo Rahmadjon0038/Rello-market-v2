@@ -17,6 +17,8 @@ class StoreDetails {
   final num? deliveryPrice;
   final List<String> bannerImages;
   final bool isActive;
+  final bool isNew;
+  final String? newBadgeText;
   final Seller? director;
   final String? createdAt;
   final String? updatedAt;
@@ -38,6 +40,8 @@ class StoreDetails {
     required this.deliveryPrice,
     required this.bannerImages,
     required this.isActive,
+    required this.isNew,
+    required this.newBadgeText,
     required this.director,
     required this.createdAt,
     required this.updatedAt,
@@ -49,9 +53,12 @@ class StoreDetails {
     final bannerRaw = json['bannerImages'];
 
     num? deliveryPrice;
-    if (rawDeliveryPrice is num) deliveryPrice = rawDeliveryPrice;
-    if (rawDeliveryPrice is String)
+    if (rawDeliveryPrice is num) {
+      deliveryPrice = rawDeliveryPrice;
+    }
+    if (rawDeliveryPrice is String) {
       deliveryPrice = num.tryParse(rawDeliveryPrice);
+    }
 
     return StoreDetails(
       id: json['id']?.toString() ?? '',
@@ -75,6 +82,8 @@ class StoreDetails {
                 .toList()
           : const [],
       isActive: json['isActive'] == true,
+      isNew: json['isNew'] == true,
+      newBadgeText: json['newBadgeText']?.toString(),
       director: rawDirector is Map<String, dynamic>
           ? Seller.fromJson(rawDirector)
           : null,

@@ -7,11 +7,13 @@ class AuthResult {
   final String name;
   final String phone;
   final String role;
+  final String? profileImg;
 
   const AuthResult({
     required this.name,
     required this.phone,
     required this.role,
+    this.profileImg,
   });
 }
 
@@ -150,6 +152,7 @@ class _AuthScreenState extends State<AuthScreen>
       name: session.name,
       phone: session.phone,
       role: session.role,
+      profileImg: session.profileImg,
     );
   }
 
@@ -939,6 +942,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       name: session.name,
       phone: session.phone,
       role: session.role,
+      profileImg: session.profileImg,
     );
   }
 

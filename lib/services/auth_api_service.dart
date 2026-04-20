@@ -340,7 +340,7 @@ class AuthApiService {
       phone: phone,
       username: json['username']?.toString() ?? phone,
       role: json['role']?.toString() ?? 'user',
-      profileImg: json['profileImg']?.toString(),
+      profileImg: _profileImgFromJson(json),
       accessToken: accessToken,
       refreshToken: refreshToken,
     );
@@ -363,6 +363,8 @@ class AuthApiService {
         ? json['user'] as Map<String, dynamic>
         : json['profile'] is Map<String, dynamic>
         ? json['profile'] as Map<String, dynamic>
+        : json['data'] is Map<String, dynamic>
+        ? json['data'] as Map<String, dynamic>
         : json;
     final firstName = profile['firstName']?.toString().trim() ?? '';
     final lastName = profile['lastName']?.toString().trim() ?? '';
@@ -382,7 +384,7 @@ class AuthApiService {
       phone: profile['phone']?.toString() ?? fallback.phone,
       username: profile['username']?.toString() ?? fallback.username,
       role: profile['role']?.toString() ?? fallback.role,
-      profileImg: profile['profileImg']?.toString() ?? fallback.profileImg,
+      profileImg: _profileImgFromJson(profile) ?? fallback.profileImg,
       accessToken:
           json['accessToken']?.toString() ??
           tokens?['accessToken']?.toString() ??
@@ -392,6 +394,19 @@ class AuthApiService {
           tokens?['refreshToken']?.toString() ??
           fallback.refreshToken,
     );
+  }
+
+  String? _profileImgFromJson(Map<String, dynamic> json) {
+    final value =
+        json['profileImg'] ??
+        json['profileImage'] ??
+        json['profileImagePath'] ??
+        json['profile_img'] ??
+        json['avatar'] ??
+        json['imagePath'];
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty || text == 'null') return null;
+    return text;
   }
 
   Future<Map<String, dynamic>> _post(

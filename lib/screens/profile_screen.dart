@@ -161,6 +161,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _name = result.name;
       _phone = result.phone;
       _role = result.role;
+      _profileImg = result.profileImg;
+      _avatarFile = null;
     });
     widget.onAuthChanged?.call();
     _showLoginSuccessNotification();
@@ -204,7 +206,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final path = _profileImg;
     if (path == null || path.isEmpty) return null;
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    return '${AuthApiService.baseUrlForFiles}$path';
+    final base = AuthApiService.baseUrlForFiles.replaceAll(RegExp(r'/+$'), '');
+    final normalizedPath = path.startsWith('/') ? path : '/$path';
+    return '$base$normalizedPath';
   }
 
   void _openEditProfile() {

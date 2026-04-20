@@ -6,6 +6,7 @@ import 'package:hello_flutter_app/models/seller_application.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/store_api_service.dart';
 import 'package:image_picker/image_picker.dart';
+
 const _primaryGreen = Color(0xFF1F5A50);
 const _ink = Color(0xFF1F2933);
 const _muted = Color(0xFF6B7280);
@@ -177,10 +178,11 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
         _error = error.message;
         _isSubmitting = false;
       });
-    } on Object {
+    } on Object catch (error) {
       if (!mounted) return;
       setState(() {
-        _error = 'Server bilan bog‘lanib bo‘lmadi';
+        _error =
+            "Ariza yuborishda kutilmagan xato: ${error.runtimeType}: $error";
         _isSubmitting = false;
       });
     }
@@ -188,7 +190,7 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
 
   void _fillForm(SellerApplication application) {
     _fullNameCtrl.text = application.fullName;
-    _birthDateCtrl.text = application.birthDate;
+    _birthDateCtrl.text = _dateOnly(application.birthDate);
     _gender = application.gender;
     _primaryPhoneCtrl.text = application.primaryPhone;
     _formatPhoneController(_primaryPhoneCtrl);
@@ -198,7 +200,7 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
     _livingAddressCtrl.text = application.livingAddress;
     _passportSeriesNumberCtrl.text = application.passportSeriesNumber;
     _passportIssuedByCtrl.text = application.passportIssuedBy;
-    _passportIssuedDateCtrl.text = application.passportIssuedDate;
+    _passportIssuedDateCtrl.text = _dateOnly(application.passportIssuedDate);
     _jshshirCtrl.text = application.jshshir;
     _storeNameCtrl.text = application.storeName;
     _storeType = _normalizeStoreType(application.storeType);
@@ -216,6 +218,14 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
     _storeLogoFile = null;
     _storeBannerImagePaths = application.storeBannerImages;
     _storeBannerImageFiles = [];
+  }
+
+  String _dateOnly(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+    final match = RegExp(r'^(\d{4}-\d{2}-\d{2})').firstMatch(trimmed);
+    if (match != null) return match.group(1)!;
+    return trimmed;
   }
 
   void _clearForm() {
@@ -316,6 +326,34 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
       }
     }
 
+    final logoError = _validateImageFile(input.storeLogoFile);
+    if (logoError != null) return "Do'kon rasmi/logo: $logoError";
+
+    if (input.storeBannerImageFiles.length > 10) {
+      return "Banner rasmlar 10 tadan oshmasligi kerak";
+    }
+
+    for (var i = 0; i < input.storeBannerImageFiles.length; i += 1) {
+      final error = _validateImageFile(input.storeBannerImageFiles[i]);
+      if (error != null) return '${i + 1}-banner rasm: $error';
+    }
+
+    return null;
+  }
+
+  String? _validateImageFile(File? file) {
+    if (file == null) return null;
+    final lower = file.path.toLowerCase();
+    final isImage =
+        lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.webp') ||
+        lower.endsWith('.gif');
+    if (!isImage) return 'Faqat image file yuklash mumkin';
+    final size = file.lengthSync();
+    const maxBytes = 50 * 1024 * 1024;
+    if (size > maxBytes) return 'Rasm hajmi 50 MB dan oshmasligi kerak';
     return null;
   }
 
@@ -363,12 +401,35 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
     });
   }
 
+  void _removeStoreLogo() {
+    if (_isSubmitting) return;
+    setState(() {
+      _storeLogoFile = null;
+      _storeLogoPath = '';
+      _error = null;
+    });
+  }
+
   Future<void> _pickStoreBannerImages() async {
     final picked = await _picker.pickMultiImage(imageQuality: 85);
     if (picked.isEmpty || !mounted) return;
     setState(() {
       _storeBannerImageFiles = picked.map((item) => File(item.path)).toList();
       _storeBannerImagePaths = [];
+      _error = null;
+    });
+  }
+
+  void _removeStoreBannerImage(int index) {
+    if (_isSubmitting) return;
+    setState(() {
+      if (_storeBannerImageFiles.isNotEmpty) {
+        _storeBannerImageFiles = List<File>.from(_storeBannerImageFiles)
+          ..removeAt(index);
+      } else if (_storeBannerImagePaths.isNotEmpty) {
+        _storeBannerImagePaths = List<String>.from(_storeBannerImagePaths)
+          ..removeAt(index);
+      }
       _error = null;
     });
   }
@@ -452,13 +513,16 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
                   children: [
                     if (_application != null)
                       _ApplicationStatusCard(application: _application!),
-                    if (_application == null ||
-                        _application!.status != 'pending') ...[
+                    if (_application?.status == 'pending') ...[
+                      const SizedBox(height: 16),
+                      const _PendingApplicationNotice(),
+                    ] else ...[
                       if (_application != null) const SizedBox(height: 16),
                       if (_isFormOpen)
                         _buildForm()
                       else
                         _OpenApplicationButton(
+                          application: _application,
                           onPressed: () {
                             setState(() {
                               if (_application?.status == 'rejected') {
@@ -756,6 +820,7 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
           existingPath: _storeLogoPath,
           enabled: !_isSubmitting,
           onPick: _pickStoreLogo,
+          onRemove: _removeStoreLogo,
         ),
         const SizedBox(height: 10),
         _StoreBannerPicker(
@@ -763,6 +828,7 @@ class _OpenStoreScreenState extends State<OpenStoreScreen> {
           existingPaths: _storeBannerImagePaths,
           enabled: !_isSubmitting,
           onPick: _pickStoreBannerImages,
+          onRemove: _removeStoreBannerImage,
         ),
         if (_error != null) ...[
           const SizedBox(height: 10),
@@ -840,12 +906,14 @@ class _StoreLogoPicker extends StatelessWidget {
   final String existingPath;
   final bool enabled;
   final VoidCallback onPick;
+  final VoidCallback onRemove;
 
   const _StoreLogoPicker({
     required this.file,
     required this.existingPath,
     required this.enabled,
     required this.onPick,
+    required this.onRemove,
   });
 
   @override
@@ -864,19 +932,33 @@ class _StoreLogoPicker extends StatelessWidget {
         ),
         child: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
-                width: 58,
-                height: 58,
-                color: Colors.white,
-                child: file != null
-                    ? Image.file(file!, fit: BoxFit.cover)
-                    : const Icon(
-                        Icons.add_photo_alternate_rounded,
-                        color: _primaryGreen,
-                      ),
-              ),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    width: 58,
+                    height: 58,
+                    color: Colors.white,
+                    child: file != null
+                        ? Image.file(file!, fit: BoxFit.cover)
+                        : const Icon(
+                            Icons.add_photo_alternate_rounded,
+                            color: _primaryGreen,
+                          ),
+                  ),
+                ),
+                if (hasImage)
+                  Positioned(
+                    right: -8,
+                    top: -8,
+                    child: _RemoveImageButton(
+                      enabled: enabled,
+                      onPressed: onRemove,
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -926,12 +1008,14 @@ class _StoreBannerPicker extends StatelessWidget {
   final List<String> existingPaths;
   final bool enabled;
   final VoidCallback onPick;
+  final void Function(int index) onRemove;
 
   const _StoreBannerPicker({
     required this.files,
     required this.existingPaths,
     required this.enabled,
     required this.onPick,
+    required this.onRemove,
   });
 
   @override
@@ -990,14 +1074,67 @@ class _StoreBannerPicker extends StatelessWidget {
                   separatorBuilder: (context, index) =>
                       const SizedBox(width: 8),
                   itemBuilder: (context, index) {
-                    return ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.file(
-                        files[index],
-                        width: 84,
-                        height: 64,
-                        fit: BoxFit.cover,
-                      ),
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.file(
+                            files[index],
+                            width: 84,
+                            height: 64,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          right: -7,
+                          top: -7,
+                          child: _RemoveImageButton(
+                            enabled: enabled,
+                            onPressed: () => onRemove(index),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ] else if (existingPaths.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 64,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: existingPaths.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 84,
+                          height: 64,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: _line),
+                          ),
+                          child: const Icon(
+                            Icons.image_rounded,
+                            color: _primaryGreen,
+                          ),
+                        ),
+                        Positioned(
+                          right: -7,
+                          top: -7,
+                          child: _RemoveImageButton(
+                            enabled: enabled,
+                            onPressed: () => onRemove(index),
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -1010,13 +1147,49 @@ class _StoreBannerPicker extends StatelessWidget {
   }
 }
 
-class _OpenApplicationButton extends StatelessWidget {
+class _RemoveImageButton extends StatelessWidget {
+  final bool enabled;
   final VoidCallback onPressed;
 
-  const _OpenApplicationButton({required this.onPressed});
+  const _RemoveImageButton({required this.enabled, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
+    return Material(
+      color: Colors.redAccent,
+      shape: const CircleBorder(),
+      elevation: 2,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: enabled ? onPressed : null,
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: Icon(
+            Icons.close_rounded,
+            color: enabled ? Colors.white : Colors.white70,
+            size: 16,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OpenApplicationButton extends StatelessWidget {
+  final SellerApplication? application;
+  final VoidCallback onPressed;
+
+  const _OpenApplicationButton({
+    required this.application,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isRejected = application?.status == 'rejected';
+    final isApproved = application?.status == 'approved';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1027,8 +1200,12 @@ class _OpenApplicationButton extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Yangi do'kon ochish",
+          Text(
+            isRejected
+                ? "Arizani qayta yuborish"
+                : isApproved
+                ? "Yana do'kon ochish"
+                : "Yangi do'kon ochish",
             style: TextStyle(
               color: _ink,
               fontSize: 18,
@@ -1036,8 +1213,10 @@ class _OpenApplicationButton extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            "Ariza yuborish uchun shaxsiy va pasport ma'lumotlaringizni kiriting.",
+          Text(
+            isRejected
+                ? "Ma'lumotlarni to'g'rilab, arizani qayta yuborishingiz mumkin."
+                : "Ariza yuborish uchun shaxsiy va pasport ma'lumotlaringizni kiriting.",
             style: TextStyle(
               color: _muted,
               fontSize: 13,
@@ -1052,10 +1231,66 @@ class _OpenApplicationButton extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: onPressed,
               icon: const Icon(Icons.edit_document),
-              label: const Text('Ariza yuborish'),
+              label: Text(isRejected ? 'Qayta yuborish' : 'Ariza yuborish'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _primaryGreen,
                 foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingApplicationNotice extends StatelessWidget {
+  const _PendingApplicationNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Ariza ko'rib chiqilmoqda",
+            style: TextStyle(
+              color: _ink,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "Admin javob bermaguncha yangi ariza yuborib bo'lmaydi. Ariza rad etilsa, shu yerda qayta yuborish tugmasi chiqadi.",
+            style: TextStyle(
+              color: _muted,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton.icon(
+              onPressed: null,
+              icon: const Icon(Icons.hourglass_top_rounded),
+              label: const Text("Javob kutilmoqda"),
+              style: ElevatedButton.styleFrom(
+                disabledBackgroundColor: _primaryGreen.withValues(alpha: 0.35),
+                disabledForegroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),

@@ -218,33 +218,52 @@ class StoreApiService {
     final session = await _authApi.loadSavedSession();
     if (session == null) throw const AuthApiException('Avval tizimga kiring');
 
-    final uri = Uri.parse('${ApiConfig.baseUrl}$path');
-    final request = await _client.openUrl(method, uri);
-    request.headers.contentType = ContentType.json;
-    request.headers.set(
-      HttpHeaders.authorizationHeader,
-      'Bearer ${session.accessToken}',
-    );
-    if (body != null) request.write(jsonEncode(body));
-
-    final response = await request.close();
-    final rawBody = await response.transform(utf8.decoder).join();
-    final decoded = _decodeJson(rawBody);
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final exception = AuthApiException(
-        decoded['error']?.toString() ??
-            decoded['message']?.toString() ??
-            'Server xatosi',
-        statusCode: response.statusCode,
+    try {
+      final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+      final request = await _client.openUrl(method, uri);
+      request.headers.contentType = ContentType.json;
+      request.headers.set(
+        HttpHeaders.authorizationHeader,
+        'Bearer ${session.accessToken}',
       );
-      if (AuthApiService.isInvalidSessionError(exception)) {
-        await _authApi.clearSession();
-      }
-      throw exception;
-    }
+      if (body != null) request.write(jsonEncode(body));
 
-    return decoded;
+      final response = await request.close();
+      final rawBody = await response.transform(utf8.decoder).join();
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decoded = _decodeJsonOrError(rawBody);
+        final exception = AuthApiException(
+          decoded['error']?.toString() ??
+              decoded['message']?.toString() ??
+              'Server xatosi (${response.statusCode})',
+          statusCode: response.statusCode,
+        );
+        if (AuthApiService.isInvalidSessionError(exception)) {
+          await _authApi.clearSession();
+        }
+        throw exception;
+      }
+
+      final decoded = _decodeJson(rawBody);
+      return decoded;
+    } on AuthApiException {
+      rethrow;
+    } on SocketException {
+      throw AuthApiException(
+        "Serverga ulanib bo'lmadi. API manzil: ${ApiConfig.baseUrl}",
+      );
+    } on FormatException catch (error) {
+      throw AuthApiException(
+        "Server noto'g'ri formatda javob qaytardi: $error",
+      );
+    } on HttpException catch (error) {
+      throw AuthApiException(error.message);
+    } on Object catch (error) {
+      throw AuthApiException(
+        "Server bilan bog'lanib bo'lmadi: ${error.runtimeType}: $error",
+      );
+    }
   }
 
   Future<Map<String, dynamic>> _sendMultipart(
@@ -256,67 +275,91 @@ class StoreApiService {
     final session = await _authApi.loadSavedSession();
     if (session == null) throw const AuthApiException('Avval tizimga kiring');
 
-    final boundary = '----RelloMarket${DateTime.now().microsecondsSinceEpoch}';
-    final uri = Uri.parse('${ApiConfig.baseUrl}$path');
-    final request = await _client.openUrl(method, uri);
-    request.headers.set(
-      HttpHeaders.authorizationHeader,
-      'Bearer ${session.accessToken}',
-    );
-    request.headers.set(
-      HttpHeaders.contentTypeHeader,
-      'multipart/form-data; boundary=$boundary',
-    );
-
-    void writeField(String name, String value) {
-      request.write('--$boundary\r\n');
-      request.write('Content-Disposition: form-data; name="$name"\r\n\r\n');
-      request.write('$value\r\n');
-    }
-
-    for (final entry in fields.entries) {
-      final value = entry.value;
-      if (value is List) {
-        for (final item in value) {
-          writeField(entry.key, item.toString());
-        }
-      } else {
-        writeField(entry.key, value.toString());
-      }
-    }
-
-    for (final entry in files.entries) {
-      for (final file in entry.value) {
-        final fileName = file.path.split(Platform.pathSeparator).last;
-        request.write('--$boundary\r\n');
-        request.write(
-          'Content-Disposition: form-data; name="${entry.key}"; filename="$fileName"\r\n',
-        );
-        request.write('Content-Type: ${_imageContentType(fileName)}\r\n\r\n');
-        await request.addStream(file.openRead());
-        request.write('\r\n');
-      }
-    }
-
-    request.write('--$boundary--\r\n');
-    final response = await request.close();
-    final rawBody = await response.transform(utf8.decoder).join();
-    final decoded = _decodeJson(rawBody);
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final exception = AuthApiException(
-        decoded['error']?.toString() ??
-            decoded['message']?.toString() ??
-            'Server xatosi',
-        statusCode: response.statusCode,
+    try {
+      final boundary =
+          '----RelloMarket${DateTime.now().microsecondsSinceEpoch}';
+      final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+      final request = await _client.openUrl(method, uri);
+      request.headers.set(
+        HttpHeaders.authorizationHeader,
+        'Bearer ${session.accessToken}',
       );
-      if (AuthApiService.isInvalidSessionError(exception)) {
-        await _authApi.clearSession();
-      }
-      throw exception;
-    }
+      request.headers.set(
+        HttpHeaders.contentTypeHeader,
+        'multipart/form-data; boundary=$boundary',
+      );
 
-    return decoded;
+      void writePart(String value) {
+        request.add(utf8.encode(value));
+      }
+
+      void writeField(String name, String value) {
+        writePart('--$boundary\r\n');
+        writePart('Content-Disposition: form-data; name="$name"\r\n\r\n');
+        writePart('$value\r\n');
+      }
+
+      for (final entry in fields.entries) {
+        final value = entry.value;
+        if (value is List) {
+          for (final item in value) {
+            writeField(entry.key, item.toString());
+          }
+        } else {
+          writeField(entry.key, value.toString());
+        }
+      }
+
+      for (final entry in files.entries) {
+        for (final file in entry.value) {
+          final fileName = file.path.split(Platform.pathSeparator).last;
+          writePart('--$boundary\r\n');
+          writePart(
+            'Content-Disposition: form-data; name="${entry.key}"; filename="$fileName"\r\n',
+          );
+          writePart('Content-Type: ${_imageContentType(fileName)}\r\n\r\n');
+          await request.addStream(file.openRead());
+          writePart('\r\n');
+        }
+      }
+
+      writePart('--$boundary--\r\n');
+      final response = await request.close();
+      final rawBody = await response.transform(utf8.decoder).join();
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decoded = _decodeJsonOrError(rawBody);
+        final exception = AuthApiException(
+          decoded['error']?.toString() ??
+              decoded['message']?.toString() ??
+              'Server xatosi (${response.statusCode})',
+          statusCode: response.statusCode,
+        );
+        if (AuthApiService.isInvalidSessionError(exception)) {
+          await _authApi.clearSession();
+        }
+        throw exception;
+      }
+
+      final decoded = _decodeJson(rawBody);
+      return decoded;
+    } on AuthApiException {
+      rethrow;
+    } on SocketException {
+      throw AuthApiException(
+        "Serverga ulanib bo'lmadi. API manzil: ${ApiConfig.baseUrl}",
+      );
+    } on FormatException catch (error) {
+      throw AuthApiException(
+        "Server noto'g'ri formatda javob qaytardi: $error",
+      );
+    } on HttpException catch (error) {
+      throw AuthApiException(error.message);
+    } on Object catch (error) {
+      throw AuthApiException(
+        "Server bilan bog'lanib bo'lmadi: ${error.runtimeType}: $error",
+      );
+    }
   }
 
   String _imageContentType(String fileName) {
@@ -332,5 +375,23 @@ class StoreApiService {
     final decoded = jsonDecode(rawBody);
     if (decoded is Map<String, dynamic>) return decoded;
     throw const AuthApiException("Server javobi noto'g'ri formatda");
+  }
+
+  Map<String, dynamic> _decodeJsonOrError(String rawBody) {
+    final trimmed = rawBody.trim();
+    if (trimmed.isEmpty) return <String, dynamic>{};
+    try {
+      final decoded = jsonDecode(trimmed);
+      if (decoded is Map<String, dynamic>) return decoded;
+      return {'error': decoded.toString()};
+    } on FormatException {
+      return {'error': _shortResponse(trimmed)};
+    }
+  }
+
+  String _shortResponse(String value) {
+    final singleLine = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (singleLine.length <= 240) return singleLine;
+    return '${singleLine.substring(0, 240)}...';
   }
 }

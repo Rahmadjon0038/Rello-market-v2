@@ -8,6 +8,8 @@ class StoreModel {
   final String imagePath;
   final String description;
   final bool isActive;
+  final bool isNew;
+  final String? newBadgeText;
   final Seller? director;
   final String createdAt;
   final String updatedAt;
@@ -20,6 +22,8 @@ class StoreModel {
     required this.imagePath,
     required this.description,
     required this.isActive,
+    required this.isNew,
+    required this.newBadgeText,
     required this.director,
     required this.createdAt,
     required this.updatedAt,
@@ -35,6 +39,8 @@ class StoreModel {
       imagePath: json['imagePath']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
       isActive: json['isActive'] is bool ? json['isActive'] as bool : false,
+      isNew: json['isNew'] == true,
+      newBadgeText: json['newBadgeText']?.toString(),
       director: rawDirector is Map<String, dynamic>
           ? Seller.fromJson(rawDirector)
           : null,
