@@ -311,11 +311,22 @@ class StoreApiService {
       }
 
       for (final entry in files.entries) {
+        var fileIndex = 0;
         for (final file in entry.value) {
           final fileName = file.path.split(Platform.pathSeparator).last;
+          final lower = fileName.toLowerCase();
+          final ext = lower.endsWith('.png')
+              ? '.png'
+              : lower.endsWith('.webp')
+              ? '.webp'
+              : lower.endsWith('.gif')
+              ? '.gif'
+              : '.jpg';
+          final uploadName =
+              'upload_${DateTime.now().microsecondsSinceEpoch}_${fileIndex++}$ext';
           writePart('--$boundary\r\n');
           writePart(
-            'Content-Disposition: form-data; name="${entry.key}"; filename="$fileName"\r\n',
+            'Content-Disposition: form-data; name="${entry.key}"; filename="$uploadName"\r\n',
           );
           writePart('Content-Type: ${_imageContentType(fileName)}\r\n\r\n');
           await request.addStream(file.openRead());

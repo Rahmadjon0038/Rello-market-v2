@@ -12,8 +12,13 @@ import 'package:image_picker/image_picker.dart';
 
 class StoreProductsScreen extends StatefulWidget {
   final String storeId;
+  final bool allowManage;
 
-  const StoreProductsScreen({super.key, required this.storeId});
+  const StoreProductsScreen({
+    super.key,
+    required this.storeId,
+    this.allowManage = false,
+  });
 
   @override
   State<StoreProductsScreen> createState() => _StoreProductsScreenState();
@@ -139,6 +144,10 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
   }
 
   Future<void> _addToCart(Product product) async {
+    if (_canManageStore) {
+      _showSnack("O'zingizning do'koningiz mahsulotini sotib ololmaysiz");
+      return;
+    }
     final qty = product.cartQty > 0 ? product.cartQty + 1 : 1;
     try {
       final serverQty = await _productApi.addToCart(product.id, qty: qty);
@@ -173,7 +182,7 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
   }
 
   Future<void> _openCreateProduct() async {
-    if (!_canManageStore) {
+    if (!widget.allowManage || !_canManageStore) {
       _showSnack("Bu do'konga mahsulot qo'sha olmaysiz");
       return;
     }
@@ -210,7 +219,7 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         actions: [
-          if (_canManageStore)
+          if (widget.allowManage && _canManageStore)
             IconButton(
               onPressed: _openCreateProduct,
               icon: const Icon(Icons.add_box_rounded),
@@ -218,7 +227,7 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
             ),
         ],
       ),
-      floatingActionButton: _canManageStore
+      floatingActionButton: widget.allowManage && _canManageStore
           ? FloatingActionButton.extended(
               onPressed: _openCreateProduct,
               backgroundColor: primaryGreen,
@@ -257,7 +266,9 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    if (_isSeller && !_canManageStore) ...[
+                    if (widget.allowManage &&
+                        _isSeller &&
+                        !_canManageStore) ...[
                       const SizedBox(height: 6),
                       Text(
                         "Siz bu do'konga mahsulot qo'sha olmaysiz",
@@ -292,7 +303,10 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
                             item: product,
                             onTap: () => _openProduct(product),
                             onLike: () => _toggleLike(product),
-                            onAddToCart: () => _addToCart(product),
+                            onAddToCart: _canManageStore
+                                ? null
+                                : () => _addToCart(product),
+                            addToCartDisabledText: "O'zingizniki",
                           );
                         },
                       ),

@@ -5,8 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:hello_flutter_app/config/api_config.dart';
 import 'package:hello_flutter_app/models/store.dart';
 import 'package:hello_flutter_app/models/store_details.dart';
-import 'package:hello_flutter_app/screens/orders_screen.dart';
 import 'package:hello_flutter_app/screens/seller_product_management_screen.dart';
+import 'package:hello_flutter_app/screens/store_orders_screen.dart';
 import 'package:hello_flutter_app/screens/store_statistics_screen.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/store_api_service.dart';
@@ -306,8 +306,11 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                   onShowImage: _showImage,
                 ),
                 SellerProductManagementScreen(storeId: widget.storeId),
-                const OrdersScreen(),
-                StoreStatisticsScreen(storeName: _store!.name),
+                StoreOrdersScreen(storeId: widget.storeId),
+                StoreStatisticsScreen(
+                  storeId: widget.storeId,
+                  storeName: _store!.name,
+                ),
               ],
             ),
     );

@@ -1296,9 +1296,9 @@ class _ApplicationDetailsSheet extends StatelessWidget {
       );
       return;
     }
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => PickLocationScreen(initial: point)));
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => PickLocationScreen(initial: point)),
+    );
   }
 
   String _storeTypeLabel(String value) {

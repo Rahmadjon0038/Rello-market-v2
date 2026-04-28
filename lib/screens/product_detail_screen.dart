@@ -17,12 +17,14 @@ class ProductDetailScreen extends StatefulWidget {
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final ProductApiService _productApi = ProductApiService();
+  final AuthApiService _authApi = AuthApiService();
   final PageController _imageController = PageController();
   Product? _product;
   bool _isLoading = true;
   bool _isActionLoading = false;
   String? _error;
   int _imageIndex = 0;
+  bool _isOwnProduct = false;
 
   @override
   void initState() {
@@ -43,9 +45,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     });
     try {
       final product = await _productApi.getProduct(widget.productId);
+      final session = await _authApi.loadSavedSession();
+      final sessionPhone = session?.phone.trim() ?? '';
+      final sellerPhone = product.seller?.phone.trim() ?? '';
+      final storePhone = product.store?.director?.phone.trim() ?? '';
+      final isOwn =
+          sessionPhone.isNotEmpty &&
+          ((sellerPhone.isNotEmpty && sellerPhone == sessionPhone) ||
+              (storePhone.isNotEmpty && storePhone == sessionPhone));
       if (!mounted) return;
       setState(() {
         _product = product;
+        _isOwnProduct = isOwn;
         _isLoading = false;
       });
     } on AuthApiException catch (error) {
@@ -95,6 +106,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Future<void> _addToCart() async {
     final product = _product;
     if (product == null || _isActionLoading) return;
+    if (_isOwnProduct) {
+      _showSnack("O'zingizning mahsulotingizni sotib ololmaysiz");
+      return;
+    }
     final nextQty = product.cartQty > 0 ? product.cartQty + 1 : 1;
     setState(() => _isActionLoading = true);
     try {
@@ -173,6 +188,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Widget _buildContent(BuildContext context, Product product) {
     const primaryGreen = Color(0xFF1F5A50);
     final images = product.resolvedImages;
+    final isOwn = _isOwnProduct;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
@@ -318,11 +334,33 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
         ],
         const SizedBox(height: 20),
+        if (isOwn)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE6F4EF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: primaryGreen.withValues(alpha: 0.18)),
+              ),
+              child: const Text(
+                "Bu sizning mahsulotingiz. O'zingiz sotib ololmaysiz.",
+                softWrap: true,
+                style: TextStyle(
+                  color: primaryGreen,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  height: 1.25,
+                ),
+              ),
+            ),
+          ),
         SizedBox(
           height: 50,
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: _isActionLoading ? null : _addToCart,
+            onPressed: (_isActionLoading || isOwn) ? null : _addToCart,
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryGreen,
               disabledBackgroundColor: primaryGreen.withValues(alpha: 0.7),
@@ -347,9 +385,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         : Icons.add_shopping_cart,
                   ),
             label: Text(
-              product.isCart
-                  ? 'Savatda (${product.cartQty})'
-                  : 'Savatga qo‘shish',
+              isOwn
+                  ? "O'zingizniki"
+                  : (product.isCart
+                        ? 'Savatda (${product.cartQty})'
+                        : 'Savatga qo‘shish'),
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
             ),
           ),

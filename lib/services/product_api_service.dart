@@ -388,10 +388,14 @@ class ProductApiService {
       'multipart/form-data; boundary=$boundary',
     );
 
+    void writePart(String value) {
+      request.add(utf8.encode(value));
+    }
+
     void writeField(String name, String value) {
-      request.write('--$boundary\r\n');
-      request.write('Content-Disposition: form-data; name="$name"\r\n\r\n');
-      request.write('$value\r\n');
+      writePart('--$boundary\r\n');
+      writePart('Content-Disposition: form-data; name="$name"\r\n\r\n');
+      writePart('$value\r\n');
     }
 
     for (final entry in fields.entries) {
@@ -406,19 +410,30 @@ class ProductApiService {
     }
 
     for (final entry in files.entries) {
+      var fileIndex = 0;
       for (final file in entry.value) {
         final fileName = file.path.split(Platform.pathSeparator).last;
-        request.write('--$boundary\r\n');
-        request.write(
-          'Content-Disposition: form-data; name="${entry.key}"; filename="$fileName"\r\n',
+        final lower = fileName.toLowerCase();
+        final ext = lower.endsWith('.png')
+            ? '.png'
+            : lower.endsWith('.webp')
+            ? '.webp'
+            : lower.endsWith('.gif')
+            ? '.gif'
+            : '.jpg';
+        final uploadName =
+            'upload_${DateTime.now().microsecondsSinceEpoch}_${fileIndex++}$ext';
+        writePart('--$boundary\r\n');
+        writePart(
+          'Content-Disposition: form-data; name="${entry.key}"; filename="$uploadName"\r\n',
         );
-        request.write('Content-Type: ${_imageContentType(fileName)}\r\n\r\n');
+        writePart('Content-Type: ${_imageContentType(fileName)}\r\n\r\n');
         await request.addStream(file.openRead());
-        request.write('\r\n');
+        writePart('\r\n');
       }
     }
 
-    request.write('--$boundary--\r\n');
+    writePart('--$boundary--\r\n');
     final response = await request.close();
     final rawBody = await response.transform(utf8.decoder).join();
     final decoded = _decodeJson(rawBody);
@@ -449,7 +464,16 @@ class ProductApiService {
 
   Map<String, dynamic> _decodeJson(String rawBody) {
     if (rawBody.trim().isEmpty) return <String, dynamic>{};
-    final decoded = jsonDecode(rawBody);
+    Object decoded;
+    try {
+      decoded = jsonDecode(rawBody);
+    } on FormatException {
+      final sample = rawBody.trim().replaceAll(RegExp(r'\s+'), ' ');
+      final preview = sample.length > 180 ? sample.substring(0, 180) : sample;
+      throw AuthApiException(
+        "Server javobi JSON emas. Javob: ${preview.isEmpty ? '-' : preview}",
+      );
+    }
     if (decoded is Map<String, dynamic>) return decoded;
     throw const AuthApiException("Server javobi noto'g'ri formatda");
   }

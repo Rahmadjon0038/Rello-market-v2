@@ -172,18 +172,17 @@ class _PickLocationScreenState extends State<PickLocationScreen>
     return showGeneralDialog<T>(
       context: context,
       barrierDismissible: barrierDismissible,
-      barrierLabel:
-          MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       barrierColor: Colors.black54,
       transitionDuration: const Duration(milliseconds: 150),
       pageBuilder: (ctx, _, __) {
-        return SafeArea(
-          child: Builder(builder: builder),
-        );
+        return SafeArea(child: Builder(builder: builder));
       },
       transitionBuilder: (ctx, anim, __, child) {
-        final curved =
-            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        final curved = CurvedAnimation(
+          parent: anim,
+          curve: Curves.easeOutCubic,
+        );
         return FadeTransition(
           opacity: curved,
           child: ScaleTransition(
@@ -197,7 +196,10 @@ class _PickLocationScreenState extends State<PickLocationScreen>
 
   Future<void> _reverseGeocode(LatLng p) async {
     try {
-      final placemarks = await placemarkFromCoordinates(p.latitude, p.longitude);
+      final placemarks = await placemarkFromCoordinates(
+        p.latitude,
+        p.longitude,
+      );
       if (placemarks.isEmpty) return;
       final m = placemarks.first;
       final parts = <String>[

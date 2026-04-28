@@ -17,15 +17,29 @@ class SellerScreen extends StatefulWidget {
 
 class _SellerScreenState extends State<SellerScreen> {
   final ProductApiService _productApi = ProductApiService();
+  final AuthApiService _authApi = AuthApiService();
   Seller? _seller;
   List<Product> _products = [];
   bool _isLoading = true;
   String? _error;
+  AuthSession? _session;
+  bool _isMySeller = false;
 
   @override
   void initState() {
     super.initState();
-    _loadSellerProducts();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await _loadSession();
+    await _loadSellerProducts();
+  }
+
+  Future<void> _loadSession() async {
+    final session = await _authApi.loadSavedSession();
+    if (!mounted) return;
+    setState(() => _session = session);
   }
 
   Future<void> _loadSellerProducts() async {
@@ -36,9 +50,14 @@ class _SellerScreenState extends State<SellerScreen> {
     try {
       final response = await _productApi.getSellerProducts(widget.sellerId);
       if (!mounted) return;
+      final isMine =
+          (_session?.phone.isNotEmpty == true) &&
+          (response.seller.phone.isNotEmpty) &&
+          (response.seller.phone == _session!.phone);
       setState(() {
         _seller = response.seller;
         _products = response.products;
+        _isMySeller = isMine;
         _isLoading = false;
       });
     } on AuthApiException catch (error) {
@@ -100,6 +119,10 @@ class _SellerScreenState extends State<SellerScreen> {
   }
 
   Future<void> _addToCart(Product product) async {
+    if (_isMySeller) {
+      _showSnack("O'zingizning mahsulotingizni sotib ololmaysiz");
+      return;
+    }
     final qty = product.cartQty > 0 ? product.cartQty + 1 : 1;
     try {
       final serverQty = await _productApi.addToCart(product.id, qty: qty);
@@ -188,7 +211,7 @@ class _SellerScreenState extends State<SellerScreen> {
                               crossAxisCount: 2,
                               mainAxisSpacing: 12,
                               crossAxisSpacing: 12,
-                              childAspectRatio: 0.62,
+                              childAspectRatio: 0.64,
                             ),
                         itemBuilder: (context, index) {
                           final product = _products[index];
@@ -196,7 +219,10 @@ class _SellerScreenState extends State<SellerScreen> {
                             item: product,
                             onTap: () => _openProduct(product),
                             onLike: () => _toggleLike(product),
-                            onAddToCart: () => _addToCart(product),
+                            onAddToCart: _isMySeller
+                                ? null
+                                : () => _addToCart(product),
+                            addToCartDisabledText: "O'zingizniki",
                           );
                         },
                       ),

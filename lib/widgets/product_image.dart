@@ -14,6 +14,9 @@ class ProductImage extends StatelessWidget {
         width: double.infinity,
         height: height,
         fit: BoxFit.cover,
+        filterQuality: FilterQuality.high,
+        isAntiAlias: true,
+        gaplessPlayback: true,
         errorBuilder: (context, error, stackTrace) =>
             _ImageFallback(height: height),
       );
@@ -24,6 +27,9 @@ class ProductImage extends StatelessWidget {
       width: double.infinity,
       height: height,
       fit: BoxFit.cover,
+      filterQuality: FilterQuality.high,
+      isAntiAlias: true,
+      gaplessPlayback: true,
       errorBuilder: (context, error, stackTrace) =>
           _ImageFallback(height: height),
     );

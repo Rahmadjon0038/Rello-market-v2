@@ -3,6 +3,7 @@ import 'package:hello_flutter_app/models/product.dart';
 import 'package:hello_flutter_app/screens/orders_screen.dart';
 import 'package:hello_flutter_app/screens/pick_location_screen.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
+import 'package:hello_flutter_app/services/order_api_service.dart';
 import 'package:hello_flutter_app/services/product_api_service.dart';
 import 'package:hello_flutter_app/widgets/product_image.dart';
 import 'package:geocoding/geocoding.dart';
@@ -20,10 +21,12 @@ class CartScreen extends StatefulWidget {
 
 class _CartScreenState extends State<CartScreen> {
   final ProductApiService _productApi = ProductApiService();
+  final OrderApiService _orderApi = OrderApiService();
   final List<_CartItem> _items = [];
   bool _isLoadingCart = true;
   String? _cartError;
   String _payMethod = 'Click';
+  bool _isPlacingOrder = false;
   final List<_Receiver> _receivers = [];
   int _selectedReceiver = -1;
   String _deliveryPlace = 'Manzil tanlanmagan';
@@ -233,6 +236,76 @@ class _CartScreenState extends State<CartScreen> {
 
   void _selectPay(String method) {
     setState(() => _payMethod = method);
+  }
+
+  String _paymentMethodToApi(String uiValue) {
+    final v = uiValue.trim();
+    if (v == 'Click') return 'click';
+    if (v == 'Payme') return 'payme';
+    if (v == "Mahsulotni olgandan so'ng") return 'cod';
+    return v.toLowerCase();
+  }
+
+  Future<void> _placeOrder() async {
+    if (_isPlacingOrder) return;
+    final receiver = _activeReceiver();
+    if (receiver == null) {
+      _showSnack('Buyurtma oluvchi yo‘q');
+      return;
+    }
+    if (_deliveryPlace == 'Manzil tanlanmagan') {
+      _showSnack('Yetkazib berish manzili yo‘q');
+      return;
+    }
+    if (!_items.any((e) => e.selected)) {
+      _showSnack('Mahsulot tanlanmagan');
+      return;
+    }
+
+    final selected = _items.where((e) => e.selected).toList();
+    final storeIds = selected
+        .map((e) => e.storeId.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet();
+    if (storeIds.isEmpty) {
+      _showSnack("Do'kon aniqlanmadi");
+      return;
+    }
+    if (storeIds.length != 1) {
+      _showSnack("Buyurtma faqat bitta do'kondan bo'lishi kerak");
+      return;
+    }
+    final storeId = storeIds.first;
+
+    setState(() => _isPlacingOrder = true);
+    try {
+      final order = await _orderApi.createOrder(
+        storeId: storeId,
+        receiver: {
+          'firstName': receiver.firstName,
+          'lastName': receiver.lastName,
+          'phone': receiver.phone,
+        },
+        delivery: {
+          'addressText': _deliveryPlace,
+          'lat': _deliveryPoint?.latitude,
+          'lng': _deliveryPoint?.longitude,
+        },
+        paymentMethod: _paymentMethodToApi(_payMethod),
+      );
+      await _loadCart();
+      widget.onSummaryChanged?.call();
+      if (!mounted) return;
+      _showOrderSuccess(orderId: order.id);
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      _showSnack(error.message);
+    } on Object {
+      if (!mounted) return;
+      _showSnack('Server bilan bog‘lanib bo‘lmadi');
+    } finally {
+      if (mounted) setState(() => _isPlacingOrder = false);
+    }
   }
 
   InputDecoration _modalInputDecoration(String label) {
@@ -711,7 +784,7 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  void _showOrderSuccess() {
+  void _showOrderSuccess({String? orderId}) {
     _showFastDialog(
       barrierDismissible: false,
       builder: (ctx) {
@@ -735,6 +808,18 @@ class _CartScreenState extends State<CartScreen> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                if (orderId != null && orderId.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Buyurtma ID: $orderId',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFF8A9A97),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 const Text(
                   "Buyurtma uchun rahmat. Uni tez orada yetkazib berishadi.",
@@ -970,7 +1055,8 @@ class _CartScreenState extends State<CartScreen> {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: _PayOption(
-                        title: '${r.fullName} • ${r.phone}',
+                        title: r.fullName,
+                        subtitle: r.phone,
                         selected: selected,
                         onTap: () => setState(() => _selectedReceiver = i),
                       ),
@@ -1042,26 +1128,37 @@ class _CartScreenState extends State<CartScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onPressed: () {
-                      final missing = _missingField();
-                      if (missing != null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(missing),
-                            duration: Duration(seconds: 2),
+                    onPressed: !canOrder || _isPlacingOrder
+                        ? null
+                        : () {
+                            final missing = _missingField();
+                            if (missing != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(missing),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                              return;
+                            }
+                            _placeOrder();
+                          },
+                    child: _isPlacingOrder
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Buyurtma berish',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        );
-                        return;
-                      }
-                      _showOrderSuccess();
-                    },
-                    child: const Text(
-                      'Buyurtma berish',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
                   ),
                 ),
               ],
@@ -1081,6 +1178,8 @@ class _CartItem {
   final int qty;
   final bool selected;
   final String imagePath;
+  final List<String> images;
+  final String storeId;
 
   const _CartItem({
     required this.id,
@@ -1089,16 +1188,24 @@ class _CartItem {
     required this.qty,
     required this.selected,
     required this.imagePath,
+    required this.images,
+    required this.storeId,
   });
 
   factory _CartItem.fromProduct(Product product) {
+    final resolvedImages = product.resolvedImages;
+    final previewImage = resolvedImages.isNotEmpty
+        ? resolvedImages.first
+        : product.resolvedImagePath;
     return _CartItem(
       id: product.id,
       name: product.name,
       price: product.price,
       qty: product.cartQty > 0 ? product.cartQty : 1,
       selected: product.selected,
-      imagePath: product.resolvedImagePath,
+      imagePath: previewImage,
+      images: resolvedImages.isNotEmpty ? resolvedImages : [previewImage],
+      storeId: product.storeId,
     );
   }
 
@@ -1110,6 +1217,8 @@ class _CartItem {
       qty: qty ?? this.qty,
       selected: selected ?? this.selected,
       imagePath: imagePath,
+      images: images,
+      storeId: storeId,
     );
   }
 }
@@ -1168,7 +1277,8 @@ class _CartCard extends StatelessWidget {
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       fullscreenDialog: true,
-                      builder: (_) => _ImagePreview(imagePath: item.imagePath),
+                      builder: (_) =>
+                          _ImagePreview(images: item.images, initialIndex: 0),
                     ),
                   );
                 },
@@ -1332,12 +1442,14 @@ class _RowItem extends StatelessWidget {
 
 class _PayOption extends StatelessWidget {
   final String title;
+  final String? subtitle;
   final Widget? leading;
   final VoidCallback? onTap;
   final bool selected;
 
   const _PayOption({
     required this.title,
+    this.subtitle,
     this.leading,
     this.onTap,
     this.selected = false,
@@ -1360,22 +1472,49 @@ class _PayOption extends StatelessWidget {
           ),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (leading != null) ...[leading!, const SizedBox(width: 10)],
-            Text(
-              title,
-              style: const TextStyle(
-                color: Color(0xFF1F5A50),
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    softWrap: true,
+                    style: const TextStyle(
+                      color: Color(0xFF1F5A50),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                    ),
+                  ),
+                  if ((subtitle ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle!,
+                      softWrap: true,
+                      style: const TextStyle(
+                        color: Color(0xFF3D4B48),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-            const Spacer(),
+            const SizedBox(width: 10),
             if (selected)
-              const Icon(
-                Icons.check_circle,
-                color: Color(0xFF1F5A50),
-                size: 18,
+              const Padding(
+                padding: EdgeInsets.only(top: 2),
+                child: Icon(
+                  Icons.check_circle,
+                  color: Color(0xFF1F5A50),
+                  size: 18,
+                ),
               ),
           ],
         ),
@@ -1464,10 +1603,37 @@ class _Receiver {
   String get fullName => '$firstName $lastName';
 }
 
-class _ImagePreview extends StatelessWidget {
-  final String imagePath;
+class _ImagePreview extends StatefulWidget {
+  final List<String> images;
+  final int initialIndex;
 
-  const _ImagePreview({required this.imagePath});
+  const _ImagePreview({required this.images, this.initialIndex = 0});
+
+  @override
+  State<_ImagePreview> createState() => _ImagePreviewState();
+}
+
+class _ImagePreviewState extends State<_ImagePreview> {
+  late final PageController _controller;
+  late final int _safeInitial;
+
+  @override
+  void initState() {
+    super.initState();
+    final count = widget.images.length;
+    _safeInitial = widget.initialIndex < 0
+        ? 0
+        : widget.initialIndex >= count
+        ? (count == 0 ? 0 : count - 1)
+        : widget.initialIndex;
+    _controller = PageController(initialPage: _safeInitial);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1476,15 +1642,30 @@ class _ImagePreview extends StatelessWidget {
       body: SafeArea(
         child: Stack(
           children: [
-            Center(
-              child: InteractiveViewer(
-                child:
-                    imagePath.startsWith('http://') ||
-                        imagePath.startsWith('https://')
-                    ? Image.network(imagePath)
-                    : Image.asset(imagePath),
+            if (widget.images.isEmpty)
+              const Center(
+                child: Text(
+                  'Rasm topilmadi',
+                  style: TextStyle(color: Colors.white),
+                ),
+              )
+            else
+              PageView.builder(
+                controller: _controller,
+                itemCount: widget.images.length,
+                itemBuilder: (context, index) {
+                  final path = widget.images[index];
+                  return Center(
+                    child: InteractiveViewer(
+                      child:
+                          path.startsWith('http://') ||
+                              path.startsWith('https://')
+                          ? Image.network(path)
+                          : Image.asset(path),
+                    ),
+                  );
+                },
               ),
-            ),
             Positioned(
               top: 12,
               right: 12,
@@ -1493,6 +1674,46 @@ class _ImagePreview extends StatelessWidget {
                 icon: const Icon(Icons.close, color: Colors.white),
               ),
             ),
+            if (widget.images.isNotEmpty)
+              Positioned(
+                bottom: 14,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      child: AnimatedBuilder(
+                        animation: _controller,
+                        builder: (context, _) {
+                          final page = _controller.hasClients
+                              ? (_controller.page ??
+                                    _controller.initialPage.toDouble())
+                              : _safeInitial.toDouble();
+                          final current = page.round().clamp(
+                            0,
+                            widget.images.length - 1,
+                          );
+                          return Text(
+                            '${current + 1}/${widget.images.length}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

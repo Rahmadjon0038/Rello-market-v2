@@ -38,6 +38,8 @@ class _HomeHeaderState extends State<HomeHeader>
   Timer? _carouselTimer;
   int _carouselIndex = 0;
   final ProductApiService _productApi = ProductApiService();
+  final AuthApiService _authApi = AuthApiService();
+  AuthSession? _session;
   List<Product> _products = [];
   List<Product> _carouselProducts = [];
   List<CategoryModel> _categories = [];
@@ -46,7 +48,14 @@ class _HomeHeaderState extends State<HomeHeader>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadSession();
     _loadHomeData();
+  }
+
+  Future<void> _loadSession() async {
+    final session = await _authApi.loadSavedSession();
+    if (!mounted) return;
+    setState(() => _session = session);
   }
 
   @override
@@ -251,6 +260,17 @@ class _HomeHeaderState extends State<HomeHeader>
   }
 
   Future<void> _addToCart(Product product) async {
+    final sessionPhone = _session?.phone.trim() ?? '';
+    final sellerPhone = product.seller?.phone.trim() ?? '';
+    final storePhone = product.store?.director?.phone.trim() ?? '';
+    final isOwn =
+        sessionPhone.isNotEmpty &&
+        ((sellerPhone.isNotEmpty && sellerPhone == sessionPhone) ||
+            (storePhone.isNotEmpty && storePhone == sessionPhone));
+    if (isOwn) {
+      _showSnack("O'zingizning mahsulotingizni sotib ololmaysiz");
+      return;
+    }
     final qty = product.cartQty > 0 ? product.cartQty + 1 : 1;
     try {
       final serverQty = await _productApi.addToCart(product.id, qty: qty);
@@ -549,7 +569,7 @@ class _HomeHeaderState extends State<HomeHeader>
                   crossAxisCount: 2,
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
-                  childAspectRatio: 0.62,
+                  childAspectRatio: 0.58,
                 ),
                 itemBuilder: (context, index) {
                   final p = _products[index];
@@ -558,6 +578,7 @@ class _HomeHeaderState extends State<HomeHeader>
                     onTap: () => _openProductDetail(p),
                     onLike: () => _toggleLike(p),
                     onAddToCart: () => _addToCart(p),
+                    imageHeight: 130,
                   );
                 },
               ),
@@ -729,8 +750,19 @@ class _CarouselCard extends StatelessWidget {
 
   const _CarouselCard({required this.item, required this.onTap});
 
+  String _truncateWords(String text, {int maxWords = 5}) {
+    final words = text
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .toList();
+    if (words.length <= maxWords) return words.join(' ');
+    return '${words.take(maxWords).join(' ')}...';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final shortDescription = _truncateWords(item.description, maxWords: 5);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 0),
       child: InkWell(
@@ -782,7 +814,7 @@ class _CarouselCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        item.description,
+                        shortDescription,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
