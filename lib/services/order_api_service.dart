@@ -13,7 +13,7 @@ class OrderApiService {
   final HttpClient _client;
   final AuthApiService _authApi;
 
-  Future<OrderModel> createOrder({
+  Future<CheckoutResult> createOrder({
     String? storeId,
     required Map<String, dynamic> receiver,
     required Map<String, dynamic> delivery,
@@ -30,7 +30,15 @@ class OrderApiService {
         'paymentMethod': paymentMethod,
       },
     );
-    return OrderModel.fromJson(data);
+    final rawList = data['data'];
+    if (rawList is List) {
+      final orders = rawList
+          .whereType<Map<String, dynamic>>()
+          .map(OrderModel.fromJson)
+          .toList();
+      return CheckoutResult(orders: orders);
+    }
+    return CheckoutResult(orders: [OrderModel.fromJson(data)]);
   }
 
   Future<List<OrderModel>> getMyOrders() async {
@@ -114,6 +122,12 @@ class OrderApiService {
     if (decoded is Map<String, dynamic>) return decoded;
     throw const AuthApiException("Server javobi noto'g'ri formatda");
   }
+}
+
+class CheckoutResult {
+  final List<OrderModel> orders;
+
+  const CheckoutResult({required this.orders});
 }
 
 class OrderDeliveryConfirmModel {

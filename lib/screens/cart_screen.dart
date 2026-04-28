@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hello_flutter_app/models/order.dart';
 import 'package:hello_flutter_app/models/product.dart';
 import 'package:hello_flutter_app/screens/orders_screen.dart';
 import 'package:hello_flutter_app/screens/pick_location_screen.dart';
@@ -262,25 +263,9 @@ class _CartScreenState extends State<CartScreen> {
       return;
     }
 
-    final selected = _items.where((e) => e.selected).toList();
-    final storeIds = selected
-        .map((e) => e.storeId.trim())
-        .where((e) => e.isNotEmpty)
-        .toSet();
-    if (storeIds.isEmpty) {
-      _showSnack("Do'kon aniqlanmadi");
-      return;
-    }
-    if (storeIds.length != 1) {
-      _showSnack("Buyurtma faqat bitta do'kondan bo'lishi kerak");
-      return;
-    }
-    final storeId = storeIds.first;
-
     setState(() => _isPlacingOrder = true);
     try {
-      final order = await _orderApi.createOrder(
-        storeId: storeId,
+      final result = await _orderApi.createOrder(
         receiver: {
           'firstName': receiver.firstName,
           'lastName': receiver.lastName,
@@ -296,7 +281,7 @@ class _CartScreenState extends State<CartScreen> {
       await _loadCart();
       widget.onSummaryChanged?.call();
       if (!mounted) return;
-      _showOrderSuccess(orderId: order.id);
+      _showOrderSuccess(orders: result.orders);
     } on AuthApiException catch (error) {
       if (!mounted) return;
       _showSnack(error.message);
@@ -784,10 +769,11 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  void _showOrderSuccess({String? orderId}) {
+  void _showOrderSuccess({required List<OrderModel> orders}) {
     _showFastDialog(
       barrierDismissible: false,
       builder: (ctx) {
+        final count = orders.length;
         return Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -799,24 +785,41 @@ class _CartScreenState extends State<CartScreen> {
               children: [
                 const Icon(Icons.check_circle, color: Colors.green, size: 64),
                 const SizedBox(height: 12),
-                const Text(
-                  'Buyurtmangiz qabul qilindi',
+                Text(
+                  count > 1
+                      ? '$count ta buyurtma yaratildi'
+                      : 'Buyurtmangiz qabul qilindi',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Color(0xFF1F5A50),
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                if (orderId != null && orderId.trim().isNotEmpty) ...[
+                if (orders.isNotEmpty) ...[
                   const SizedBox(height: 6),
-                  Text(
-                    'Buyurtma ID: $orderId',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Color(0xFF8A9A97),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 140),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF6F7F8),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.all(10),
+                      itemCount: orders.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 6),
+                      itemBuilder: (_, i) {
+                        final o = orders[i];
+                        return Text(
+                          'ID: ${o.id}\nStore: ${o.storeId}\nJami: ${_format(o.total)} so‘m • Status: ${o.status}',
+                          style: const TextStyle(
+                            color: Color(0xFF3D4B48),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -992,6 +995,33 @@ class _CartScreenState extends State<CartScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
+          Builder(
+            builder: (_) {
+              final selected = _items.where((e) => e.selected).toList();
+              final storeCount = selected
+                  .map((e) => e.storeId.trim())
+                  .where((e) => e.isNotEmpty)
+                  .toSet()
+                  .length;
+              if (selected.isEmpty || storeCount == 0) {
+                return const SizedBox.shrink();
+              }
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "$storeCount do'kondan $storeCount ta buyurtma yaratiladi",
+                    style: const TextStyle(
+                      color: Color(0xFF1F5A50),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
