@@ -334,28 +334,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
         ],
         const SizedBox(height: 20),
-        if (isOwn)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE6F4EF),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: primaryGreen.withValues(alpha: 0.18)),
-              ),
-              child: const Text(
-                "Bu sizning mahsulotingiz. O'zingiz sotib ololmaysiz.",
-                softWrap: true,
-                style: TextStyle(
-                  color: primaryGreen,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  height: 1.25,
-                ),
-              ),
-            ),
-          ),
         SizedBox(
           height: 50,
           width: double.infinity,

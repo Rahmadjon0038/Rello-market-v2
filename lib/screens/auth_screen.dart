@@ -1,7 +1,167 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
+import 'package:hello_flutter_app/services/push_token_manager.dart';
+
+class _PhoneCountry {
+  final String name;
+  final String dialCode;
+  final int maxDigits;
+  final List<int> groups;
+
+  const _PhoneCountry({
+    required this.name,
+    required this.dialCode,
+    required this.maxDigits,
+    required this.groups,
+  });
+}
+
+const _PhoneCountry _uzCountry = _PhoneCountry(
+  name: "O'zbekiston",
+  dialCode: '+998',
+  maxDigits: 9,
+  groups: [2, 3, 2, 2], // 90-123-34-56
+);
+
+class _GroupedDigitsFormatter extends TextInputFormatter {
+  final int maxDigits;
+  final List<int> groups;
+
+  const _GroupedDigitsFormatter({
+    required this.maxDigits,
+    required this.groups,
+  });
+
+  static String _digitsOnly(String input) {
+    final buffer = StringBuffer();
+    for (final rune in input.runes) {
+      final ch = String.fromCharCode(rune);
+      if (ch.codeUnitAt(0) >= 48 && ch.codeUnitAt(0) <= 57) {
+        buffer.write(ch);
+      }
+    }
+    return buffer.toString();
+  }
+
+  String formatDigits(String digits) {
+    final limited = digits.length > maxDigits
+        ? digits.substring(0, maxDigits)
+        : digits;
+    if (limited.isEmpty) return '';
+
+    final buffer = StringBuffer();
+    var index = 0;
+    for (
+      var groupIndex = 0;
+      groupIndex < groups.length && index < limited.length;
+      groupIndex++
+    ) {
+      final groupLen = groups[groupIndex];
+      final end = (index + groupLen) > limited.length
+          ? limited.length
+          : (index + groupLen);
+      buffer.write(limited.substring(index, end));
+      index = end;
+      if (index < limited.length) buffer.write('-');
+    }
+    if (index < limited.length) {
+      if (buffer.isNotEmpty) buffer.write('-');
+      buffer.write(limited.substring(index));
+    }
+    return buffer.toString();
+  }
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = _digitsOnly(newValue.text);
+    final limited = digits.length > maxDigits
+        ? digits.substring(0, maxDigits)
+        : digits;
+
+    final digitsBeforeCursor = _digitsOnly(
+      newValue.text.substring(
+        0,
+        newValue.selection.extentOffset.clamp(0, newValue.text.length),
+      ),
+    ).length;
+
+    final formatted = formatDigits(limited);
+
+    var targetOffset = 0;
+    var seenDigits = 0;
+    while (targetOffset < formatted.length && seenDigits < digitsBeforeCursor) {
+      final code = formatted.codeUnitAt(targetOffset);
+      if (code >= 48 && code <= 57) seenDigits += 1;
+      targetOffset += 1;
+    }
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: targetOffset),
+      composing: TextRange.empty,
+    );
+  }
+}
+
+class _UzPhoneInputFormatter extends TextInputFormatter {
+  const _UzPhoneInputFormatter();
+
+  String _normalizeDigits(String digits) {
+    var out = digits;
+    if (out.startsWith('998')) out = out.substring(3);
+    if (out.startsWith('0') && out.length > _uzCountry.maxDigits) {
+      out = out.substring(1);
+    }
+    if (out.length > _uzCountry.maxDigits) {
+      out = out.substring(out.length - _uzCountry.maxDigits);
+    }
+    return out;
+  }
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final normalized = _normalizeDigits(digits);
+
+    final digitsBeforeCursor = newValue.selection.extentOffset
+        .clamp(0, newValue.text.length)
+        .toInt();
+    final beforeCursorDigits = newValue.text
+        .substring(0, digitsBeforeCursor)
+        .replaceAll(RegExp(r'\D'), '');
+    final normalizedBeforeCursor = _normalizeDigits(beforeCursorDigits).length;
+
+    final grouped = _GroupedDigitsFormatter(
+      maxDigits: _uzCountry.maxDigits,
+      groups: _uzCountry.groups,
+    );
+    final formatted = grouped.formatDigits(normalized);
+
+    var targetOffset = 0;
+    var seenDigits = 0;
+    while (targetOffset < formatted.length &&
+        seenDigits < normalizedBeforeCursor) {
+      final code = formatted.codeUnitAt(targetOffset);
+      if (code >= 48 && code <= 57) seenDigits += 1;
+      targetOffset += 1;
+    }
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: targetOffset),
+      composing: TextRange.empty,
+    );
+  }
+}
 
 class AuthResult {
   final String name;
@@ -102,6 +262,55 @@ class _AuthScreenState extends State<AuthScreen>
     );
   }
 
+  Widget _buildPhoneInput({
+    required String label,
+    required TextEditingController controller,
+  }) {
+    const primaryGreen = Color(0xFF1F5A50);
+
+    return TextField(
+      controller: controller,
+      keyboardType: TextInputType.phone,
+      cursorColor: primaryGreen,
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+        const _UzPhoneInputFormatter(),
+      ],
+      decoration: _inputDecoration(label).copyWith(
+        prefixText: '${_uzCountry.dialCode} ',
+        prefixStyle: const TextStyle(
+          color: primaryGreen,
+          fontWeight: FontWeight.w900,
+          fontSize: 15,
+        ),
+        hintText: '90-123-34-56',
+      ),
+    );
+  }
+
+  String _composePhone(String nationalFormatted) {
+    var digits = nationalFormatted.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('998')) {
+      digits = digits.substring(3);
+    }
+    if (digits.startsWith('0') && digits.length > _uzCountry.maxDigits) {
+      digits = digits.substring(1);
+    }
+    if (digits.length > _uzCountry.maxDigits) {
+      digits = digits.substring(digits.length - _uzCountry.maxDigits);
+    }
+    return '${_uzCountry.dialCode}$digits';
+  }
+
+  bool _isUzNationalComplete(String nationalFormatted) {
+    var digits = nationalFormatted.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('998')) digits = digits.substring(3);
+    if (digits.startsWith('0') && digits.length > _uzCountry.maxDigits) {
+      digits = digits.substring(1);
+    }
+    return digits.length == _uzCountry.maxDigits;
+  }
+
   String _codeMessage(CodeResponse response) {
     final codeText = response.smsCode == null
         ? ''
@@ -158,10 +367,16 @@ class _AuthScreenState extends State<AuthScreen>
 
   Future<void> _login() async {
     if (_isSubmitting) return;
-    final phone = _loginPhoneCtrl.text.trim();
+    final national = _loginPhoneCtrl.text.trim();
+    final phone = _composePhone(national);
     final password = _loginPasswordCtrl.text.trim();
-    if (phone.isEmpty || password.isEmpty) {
+    final phoneDigits = national.replaceAll(RegExp(r'\\D'), '');
+    if (phoneDigits.isEmpty || password.isEmpty) {
       _setLoginMessage(error: 'Telefon raqam va parolni kiriting');
+      return;
+    }
+    if (!_isUzNationalComplete(national)) {
+      _setLoginMessage(error: 'Telefon raqam to‘liq emas');
       return;
     }
     if (password.length < 6) {
@@ -180,6 +395,8 @@ class _AuthScreenState extends State<AuthScreen>
     try {
       final session = await _authApi.login(phone: phone, password: password);
       if (!mounted) return;
+      await PushTokenManager().registerNow();
+      if (!mounted) return;
       Navigator.of(context).pop(_resultFromSession(session));
     } on AuthApiException catch (error) {
       if (!mounted) return;
@@ -194,9 +411,15 @@ class _AuthScreenState extends State<AuthScreen>
 
   Future<void> _goRegisterCodeStep() async {
     if (_isSubmitting) return;
-    final phone = _registerPhoneCtrl.text.trim();
-    if (phone.isEmpty) {
+    final national = _registerPhoneCtrl.text.trim();
+    final phone = _composePhone(national);
+    final phoneDigits = national.replaceAll(RegExp(r'\\D'), '');
+    if (phoneDigits.isEmpty) {
       _setRegisterMessage(error: 'Telefon raqamni kiriting');
+      return;
+    }
+    if (!_isUzNationalComplete(national)) {
+      _setRegisterMessage(error: 'Telefon raqam to‘liq emas');
       return;
     }
 
@@ -228,9 +451,15 @@ class _AuthScreenState extends State<AuthScreen>
 
   Future<void> _resendRegisterCode() async {
     if (_isSubmitting || _registerSmsSecondsLeft > 0) return;
-    final phone = _registerPhoneCtrl.text.trim();
-    if (phone.isEmpty) {
+    final national = _registerPhoneCtrl.text.trim();
+    final phone = _composePhone(national);
+    final phoneDigits = national.replaceAll(RegExp(r'\\D'), '');
+    if (phoneDigits.isEmpty) {
       _setRegisterMessage(error: 'Telefon raqamni kiriting');
+      return;
+    }
+    if (!_isUzNationalComplete(national)) {
+      _setRegisterMessage(error: 'Telefon raqam to‘liq emas');
       return;
     }
 
@@ -261,7 +490,7 @@ class _AuthScreenState extends State<AuthScreen>
 
   Future<void> _verifyRegisterCodeStep() async {
     if (_isSubmitting) return;
-    final phone = _registerPhoneCtrl.text.trim();
+    final phone = _composePhone(_registerPhoneCtrl.text.trim());
     final code = _registerCodeCtrl.text.trim();
     if (code.isEmpty) {
       _setRegisterMessage(error: 'SMS kodni kiriting');
@@ -304,11 +533,18 @@ class _AuthScreenState extends State<AuthScreen>
     if (_isSubmitting) return;
     final firstName = _registerFirstCtrl.text.trim();
     final lastName = _registerLastCtrl.text.trim();
-    final phone = _registerPhoneCtrl.text.trim();
+    final national = _registerPhoneCtrl.text.trim();
+    final phone = _composePhone(national);
     final password = _registerPasswordCtrl.text.trim();
     final registrationToken = _registrationToken;
     if (firstName.isEmpty || lastName.isEmpty || password.isEmpty) {
       _setRegisterMessage(error: 'Ism, familiya va parolni kiriting');
+      return;
+    }
+    final phoneDigits = national.replaceAll(RegExp(r'\\D'), '');
+    if (phoneDigits.isEmpty || !_isUzNationalComplete(national)) {
+      _setRegisterMessage(error: 'Telefon raqam to‘liq emas');
+      setState(() => _registerStep = 0);
       return;
     }
     if (registrationToken == null || registrationToken.isEmpty) {
@@ -336,6 +572,8 @@ class _AuthScreenState extends State<AuthScreen>
         registrationToken: registrationToken,
         password: password,
       );
+      if (!mounted) return;
+      await PushTokenManager().registerNow();
       if (!mounted) return;
       Navigator.of(context).pop(_resultFromSession(session));
     } on AuthApiException catch (error) {
@@ -559,12 +797,7 @@ class _AuthScreenState extends State<AuthScreen>
       padding: const EdgeInsets.only(top: 12),
       child: Column(
         children: [
-          TextField(
-            controller: _loginPhoneCtrl,
-            keyboardType: TextInputType.phone,
-            cursorColor: const Color(0xFF1F5A50),
-            decoration: _inputDecoration('Telefon raqam'),
-          ),
+          _buildPhoneInput(label: 'Telefon raqam', controller: _loginPhoneCtrl),
           const SizedBox(height: 10),
           TextField(
             controller: _loginPasswordCtrl,
@@ -689,11 +922,9 @@ class _AuthScreenState extends State<AuthScreen>
         children: [
           _buildRegisterSteps(),
           const SizedBox(height: 10),
-          TextField(
+          _buildPhoneInput(
+            label: 'Telefon raqami',
             controller: _registerPhoneCtrl,
-            keyboardType: TextInputType.phone,
-            cursorColor: primaryGreen,
-            decoration: _inputDecoration('Telefon raqami'),
           ),
           _InlineMessage(message: _registerMessage, error: _registerError),
         ],

@@ -32,6 +32,10 @@
 	<string>Manzilingizni aniqlash uchun location kerak.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Profil rasmingizni tanlash uchun ruxsat kerak.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

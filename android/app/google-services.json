@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "336413266275",
+    "project_id": "rello-market-541e3",
+    "storage_bucket": "rello-market-541e3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:336413266275:android:8ffcf54aaf78cfcb79c356",
+        "android_client_info": {
+          "package_name": "com.example.helloFlutterApp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD1DdQUSMgiMnSZriY1oJc3Q5q0NAluYSA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

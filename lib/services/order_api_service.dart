@@ -42,13 +42,19 @@ class OrderApiService {
   }
 
   Future<List<OrderModel>> getMyOrders() async {
-    final data = await _send('GET', '/orders', authRequired: true);
-    final raw = data['data'];
-    if (raw is! List) return const [];
-    return raw
-        .whereType<Map<String, dynamic>>()
-        .map(OrderModel.fromJson)
-        .toList();
+    try {
+      final data = await _send('GET', '/orders', authRequired: true);
+      final raw = data['data'];
+      if (raw is! List) return const [];
+      return raw
+          .whereType<Map<String, dynamic>>()
+          .map(OrderModel.fromJson)
+          .toList();
+    } on AuthApiException catch (error) {
+      // Some backends return 404 when there are no orders yet.
+      if (error.statusCode == 404) return const [];
+      rethrow;
+    }
   }
 
   Future<OrderModel> getOrder(String id) async {
