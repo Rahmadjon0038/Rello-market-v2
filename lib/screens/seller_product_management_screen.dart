@@ -314,6 +314,8 @@ class _CreateProductDraft {
   String price = '';
   String qty = '1';
   String brand = '';
+  String sizes = '';
+  String colors = '';
   String categoryId = '';
   final List<File> images = [];
 
@@ -323,6 +325,8 @@ class _CreateProductDraft {
     price = '';
     qty = '1';
     brand = '';
+    sizes = '';
+    colors = '';
     categoryId = '';
     images.clear();
   }
@@ -488,6 +492,16 @@ class _SellerProductRow extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         'Umumiy: $totalText',
+                        softWrap: true,
+                        style: TextStyle(
+                          color: primaryGreen.withValues(alpha: 0.65),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '1 dona: $priceText',
                         softWrap: true,
                         style: TextStyle(
                           color: primaryGreen.withValues(alpha: 0.65),
@@ -730,6 +744,8 @@ class _EditProductSheetState extends State<_EditProductSheet> {
   final _priceCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController();
   final _brandCtrl = TextEditingController();
+  final _sizesCtrl = TextEditingController();
+  final _colorsCtrl = TextEditingController();
   final ImagePicker _picker = ImagePicker();
   List<String> _currentImages = const [];
   List<String> _currentImagesRaw = const [];
@@ -756,6 +772,8 @@ class _EditProductSheetState extends State<_EditProductSheet> {
     _priceCtrl.dispose();
     _qtyCtrl.dispose();
     _brandCtrl.dispose();
+    _sizesCtrl.dispose();
+    _colorsCtrl.dispose();
     super.dispose();
   }
 
@@ -793,6 +811,8 @@ class _EditProductSheetState extends State<_EditProductSheet> {
         _priceCtrl.text = product.price.toString();
         _qtyCtrl.text = product.qty.toString();
         _brandCtrl.text = product.brand;
+        _sizesCtrl.text = product.sizes.join(', ');
+        _colorsCtrl.text = product.colors.join(', ');
         _selectedCategory = selected;
         _currentImagesRaw = rawImages;
         _initialImagesRaw = List<String>.from(rawImages);
@@ -898,6 +918,10 @@ class _EditProductSheetState extends State<_EditProductSheet> {
         'categoryId': _selectedCategory!.id,
         'brand': _brandCtrl.text.trim(),
       };
+      final sizes = _sizesCtrl.text.trim();
+      final colors = _colorsCtrl.text.trim();
+      if (sizes.isNotEmpty) fields['sizes'] = sizes;
+      if (colors.isNotEmpty) fields['colors'] = colors;
       final needsMultipart =
           _newImages.isNotEmpty || _removedImages.isNotEmpty || _orderChanged;
       if (needsMultipart) {
@@ -1037,6 +1061,20 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                     TextField(
                       controller: _brandCtrl,
                       decoration: _inputDecoration('Brend'),
+                      textInputAction: TextInputAction.done,
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _sizesCtrl,
+                      decoration: _inputDecoration('Razmerlar (masalan: S,M,L)'),
+                      textInputAction: TextInputAction.next,
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _colorsCtrl,
+                      decoration: _inputDecoration(
+                        'Ranglar (masalan: qora, oq)',
+                      ),
                       textInputAction: TextInputAction.done,
                     ),
                     const SizedBox(height: 10),
@@ -1317,6 +1355,8 @@ class _CreateProductSheetState extends State<_CreateProductSheet> {
   final _priceCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController(text: '1');
   final _brandCtrl = TextEditingController();
+  final _sizesCtrl = TextEditingController();
+  final _colorsCtrl = TextEditingController();
   final ImagePicker _picker = ImagePicker();
   List<File> _imageFiles = [];
 
@@ -1333,6 +1373,8 @@ class _CreateProductSheetState extends State<_CreateProductSheet> {
     _priceCtrl.text = widget.draft.price;
     _qtyCtrl.text = widget.draft.qty;
     _brandCtrl.text = widget.draft.brand;
+    _sizesCtrl.text = widget.draft.sizes;
+    _colorsCtrl.text = widget.draft.colors;
     _imageFiles = List<File>.from(widget.draft.images);
 
     _nameCtrl.addListener(() => widget.draft.name = _nameCtrl.text);
@@ -1340,6 +1382,8 @@ class _CreateProductSheetState extends State<_CreateProductSheet> {
     _priceCtrl.addListener(() => widget.draft.price = _priceCtrl.text);
     _qtyCtrl.addListener(() => widget.draft.qty = _qtyCtrl.text);
     _brandCtrl.addListener(() => widget.draft.brand = _brandCtrl.text);
+    _sizesCtrl.addListener(() => widget.draft.sizes = _sizesCtrl.text);
+    _colorsCtrl.addListener(() => widget.draft.colors = _colorsCtrl.text);
 
     _loadCategories();
   }
@@ -1351,6 +1395,8 @@ class _CreateProductSheetState extends State<_CreateProductSheet> {
     _priceCtrl.dispose();
     _qtyCtrl.dispose();
     _brandCtrl.dispose();
+    _sizesCtrl.dispose();
+    _colorsCtrl.dispose();
     super.dispose();
   }
 
@@ -1409,6 +1455,8 @@ class _CreateProductSheetState extends State<_CreateProductSheet> {
     final price = int.tryParse(_priceCtrl.text.trim()) ?? -1;
     final qty = int.tryParse(_qtyCtrl.text.trim()) ?? -1;
     final brand = _brandCtrl.text.trim();
+    final sizes = _sizesCtrl.text.trim();
+    final colors = _colorsCtrl.text.trim();
     final categoryId = _selectedCategory?.id ?? '';
 
     if (name.isEmpty) {
@@ -1450,6 +1498,8 @@ class _CreateProductSheetState extends State<_CreateProductSheet> {
           'qty': qty,
           'categoryId': categoryId,
           if (brand.isNotEmpty) 'brand': brand,
+          if (sizes.isNotEmpty) 'sizes': sizes,
+          if (colors.isNotEmpty) 'colors': colors,
         },
         images: _imageFiles,
       );
@@ -1564,6 +1614,18 @@ class _CreateProductSheetState extends State<_CreateProductSheet> {
               TextField(
                 controller: _brandCtrl,
                 decoration: _inputDecoration('Brend'),
+                textInputAction: TextInputAction.done,
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _sizesCtrl,
+                decoration: _inputDecoration('Razmerlar (masalan: S,M,L)'),
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _colorsCtrl,
+                decoration: _inputDecoration('Ranglar (masalan: qora, oq)'),
                 textInputAction: TextInputAction.done,
               ),
               const SizedBox(height: 10),

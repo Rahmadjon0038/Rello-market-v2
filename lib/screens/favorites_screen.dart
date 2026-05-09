@@ -3,6 +3,7 @@ import 'package:hello_flutter_app/models/product.dart';
 import 'package:hello_flutter_app/screens/product_detail_screen.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/product_api_service.dart';
+import 'package:hello_flutter_app/utils/text_utils.dart';
 import 'package:hello_flutter_app/widgets/product_image.dart';
 
 class FavoritesScreen extends StatefulWidget {
@@ -251,6 +252,8 @@ class _FavProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
+    const descriptionColor = Color(0xFF1F2933);
+    final descriptionPreview = truncateWords(item.description, maxWords: 26);
 
     return Material(
       color: Colors.white,
@@ -299,12 +302,13 @@ class _FavProductCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          item.description,
-                          maxLines: 2,
+                          descriptionPreview,
+                          maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: primaryGreen.withValues(alpha: 0.7),
-                            fontSize: 11,
+                            color: descriptionColor.withValues(alpha: 0.72),
+                            fontSize: 12,
+                            height: 1.2,
                           ),
                         ),
                         const SizedBox(height: 4),

@@ -1,12 +1,17 @@
 import 'dart:io';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hello_flutter_app/screens/admin_panel_screen.dart';
 import 'package:hello_flutter_app/screens/auth_screen.dart';
 import 'package:hello_flutter_app/screens/my_stores_screen.dart';
 import 'package:hello_flutter_app/screens/open_store_screen.dart';
 import 'package:hello_flutter_app/screens/orders_screen.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
+import 'package:hello_flutter_app/services/push_api_service.dart';
+import 'package:hello_flutter_app/services/push_token_manager.dart';
 import 'package:image_picker/image_picker.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -23,6 +28,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoggedIn = false;
   bool _isCheckingSession = true;
   bool _authRouteOpen = false;
+  bool _isSendingPushTest = false;
+  String? _lastPushTestId;
+  int? _lastPushSuccessCount;
+  int? _lastPushFailureCount;
+  String? _lastFcmTokenStatus;
   String _name = '';
   String _phone = '';
   String _role = 'user';
@@ -30,6 +40,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   File? _avatarFile;
   final ImagePicker _picker = ImagePicker();
   final AuthApiService _authApi = AuthApiService();
+  final PushApiService _pushApi = PushApiService();
 
   @override
   void initState() {
@@ -60,6 +71,86 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _role = session.role;
       _profileImg = session.profileImg;
     });
+  }
+
+  String _platformLabel() {
+    if (Platform.isIOS) return 'ios';
+    return 'android';
+  }
+
+  Future<void> _copyAccessToken() async {
+    try {
+      final session = await _authApi.loadSavedSession();
+      final token = session?.accessToken.trim() ?? '';
+      if (token.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Access token topilmadi')),
+        );
+        return;
+      }
+      await Clipboard.setData(ClipboardData(text: token));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Access token copy qilindi')),
+      );
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tokenni copy qilib bo‘lmadi')),
+      );
+    }
+  }
+
+  Future<void> _sendPushTest() async {
+    if (_isSendingPushTest) return;
+    setState(() => _isSendingPushTest = true);
+    try {
+      // Don't block UI waiting for iOS APNs token readiness. If token isn't
+      // registered yet, `/push/test` will simply report 0 tokens.
+      PushTokenManager().registerNow();
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      final hasToken = (fcmToken ?? '').trim().isNotEmpty;
+      final now = DateTime.now();
+      final id = now.toIso8601String();
+
+      final response = await _pushApi.sendTestPush(
+        title: 'Rello test push',
+        body: 'Test ID: $id',
+        data: {'type': 'test', 'id': id, 'platform': _platformLabel()},
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _lastPushTestId = id;
+        _lastPushSuccessCount = (response['successCount'] is num)
+            ? (response['successCount'] as num).toInt()
+            : null;
+        _lastPushFailureCount = (response['failureCount'] is num)
+            ? (response['failureCount'] as num).toInt()
+            : null;
+        _lastFcmTokenStatus = hasToken ? 'FCM token: OK' : 'FCM token: YO‘Q';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Test push yuborildi (ID: $id)',
+          ),
+        ),
+      );
+    } on AuthApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Serverga ulanib bo'lmadi")),
+      );
+    } finally {
+      if (mounted) setState(() => _isSendingPushTest = false);
+    }
   }
 
   Future<T?> _showFastBottomSheet<T>({
@@ -126,6 +217,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _logout() async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      try {
+        await PushTokenManager().registerNow();
+        final token = await FirebaseMessaging.instance.getToken();
+        final trimmed = (token ?? '').trim();
+        if (trimmed.isNotEmpty) {
+          await _pushApi.unregisterDeviceToken(token: trimmed);
+        }
+      } on Object {
+        // best-effort
+      }
+    }
     await _authApi.clearSession();
     if (!mounted) return;
     _resetLoggedOutState();
@@ -662,6 +765,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   MaterialPageRoute(builder: (_) => const AdminPanelScreen()),
                 );
               },
+            ),
+          ],
+          const SizedBox(height: 8),
+          if (kDebugMode)
+            _ActionTile(
+              title: 'Access token (copy)',
+              icon: Icons.key_rounded,
+              onTap: _copyAccessToken,
+            ),
+          if (kDebugMode) const SizedBox(height: 8),
+          _ActionTile(
+            title: _isSendingPushTest ? 'Push test yuborilmoqda...' : 'Push test',
+            icon: Icons.notifications_active_rounded,
+            onTap: _isSendingPushTest ? null : _sendPushTest,
+          ),
+          if ((_lastPushTestId ?? '').isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Oxirgi test: $_lastPushTestId'
+              '${_lastPushSuccessCount == null && _lastPushFailureCount == null ? '' : ' (ok: ${_lastPushSuccessCount ?? '-'}, fail: ${_lastPushFailureCount ?? '-'})'}',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF6C7A78),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          if ((_lastFcmTokenStatus ?? '').isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              _lastFcmTokenStatus!,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF6C7A78),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
           const SizedBox(height: 12),

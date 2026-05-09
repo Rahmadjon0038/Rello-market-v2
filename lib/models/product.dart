@@ -14,6 +14,8 @@ class Product {
   final String categoryId;
   final CategoryModel? category;
   final String brand;
+  final List<String> sizes;
+  final List<String> colors;
   final bool isCarousel;
   final bool isActive;
   final bool isLiked;
@@ -35,6 +37,8 @@ class Product {
     required this.categoryId,
     required this.category,
     required this.brand,
+    this.sizes = const [],
+    this.colors = const [],
     required this.isCarousel,
     required this.isActive,
     required this.isLiked,
@@ -74,6 +78,9 @@ class Product {
         : null;
     final storeId = json['storeId']?.toString() ?? store?.id ?? '';
 
+    final sizes = _stringListFromJson(json['sizes']);
+    final colors = _stringListFromJson(json['colors']);
+
     return Product(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
@@ -85,6 +92,8 @@ class Product {
       categoryId: json['categoryId']?.toString() ?? category?.id ?? '',
       category: category,
       brand: json['brand']?.toString() ?? '',
+      sizes: sizes,
+      colors: colors,
       isCarousel: json['isCarousel'] is bool
           ? json['isCarousel'] as bool
           : false,
@@ -108,6 +117,8 @@ class Product {
     Seller? seller,
     String? storeId,
     StoreSummary? store,
+    List<String>? sizes,
+    List<String>? colors,
   }) {
     return Product(
       id: id,
@@ -120,6 +131,8 @@ class Product {
       categoryId: categoryId,
       category: category,
       brand: brand,
+      sizes: sizes ?? this.sizes,
+      colors: colors ?? this.colors,
       isCarousel: isCarousel,
       isActive: isActive,
       isLiked: isLiked ?? this.isLiked,
@@ -172,5 +185,23 @@ class Product {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return int.tryParse(value?.toString() ?? '') ?? fallback;
+  }
+
+  static List<String> _stringListFromJson(Object? value) {
+    if (value == null) return const [];
+    if (value is List) {
+      return value
+          .map((e) => e?.toString().trim() ?? '')
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    if (value is String) {
+      return value
+          .split(RegExp(r'[,\n]'))
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    return const [];
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,6 +12,8 @@ class PushApiService {
 
   final HttpClient _client;
   final AuthApiService _authApi;
+
+  static const Duration _requestTimeout = Duration(seconds: 12);
 
   Future<bool> registerDeviceToken({
     required String token,
@@ -26,19 +29,33 @@ class PushApiService {
     return true;
   }
 
-  Future<void> sendTestPush({String? title, String? body}) async {
+  Future<bool> unregisterDeviceToken({required String token}) async {
+    final session = await _authApi.loadSavedSession();
+    if (session == null) return false;
+    await _delete(
+      '/push/token',
+      accessToken: session.accessToken,
+      body: {'token': token},
+    );
+    return true;
+  }
+
+  Future<Map<String, dynamic>> sendTestPush({
+    String? title,
+    String? body,
+    Map<String, dynamic>? data,
+  }) async {
     final session = await _authApi.loadSavedSession();
     if (session == null) {
       throw const AuthApiException('Avval tizimga kiring');
     }
-    await _post(
-      '/push/test',
-      accessToken: session.accessToken,
-      body: {
-        if ((title ?? '').trim().isNotEmpty) 'title': title!.trim(),
-        if ((body ?? '').trim().isNotEmpty) 'body': body!.trim(),
-      },
-    );
+
+    final payload = <String, dynamic>{
+      if ((title ?? '').trim().isNotEmpty) 'title': title!.trim(),
+      if ((body ?? '').trim().isNotEmpty) 'body': body!.trim(),
+      if (data != null && data.isNotEmpty) 'data': data,
+    };
+    return await _post('/push/test', accessToken: session.accessToken, body: payload);
   }
 
   Future<Map<String, dynamic>> _post(
@@ -47,24 +64,100 @@ class PushApiService {
     required Map<String, dynamic> body,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}$path');
-    final request = await _client.postUrl(uri);
-    request.headers.contentType = ContentType.json;
-    request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $accessToken');
-    request.write(jsonEncode(body));
+    try {
+      _client.connectionTimeout ??= _requestTimeout;
+      final request = await _client.postUrl(uri).timeout(_requestTimeout);
+      request.headers.contentType = ContentType.json;
+      request.headers.set(
+        HttpHeaders.authorizationHeader,
+        'Bearer $accessToken',
+      );
+      request.write(jsonEncode(body));
 
-    final response = await request.close();
-    final rawBody = await response.transform(utf8.decoder).join();
-    final decoded = _decodeJson(rawBody);
+      final response = await request.close().timeout(_requestTimeout);
+      final rawBody = await response
+          .transform(utf8.decoder)
+          .join()
+          .timeout(_requestTimeout);
+      final decoded = _decodeJson(rawBody);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw AuthApiException(
+          decoded['error']?.toString() ??
+              decoded['message']?.toString() ??
+              'Server xatosi',
+          statusCode: response.statusCode,
+        );
+      }
+      return decoded;
+    } on TimeoutException {
+      throw const AuthApiException('Server javob bermadi (timeout)');
+    } on SocketException catch (e) {
+      final details = (e.osError?.message ?? '').trim();
       throw AuthApiException(
-        decoded['error']?.toString() ??
-            decoded['message']?.toString() ??
-            'Server xatosi',
-        statusCode: response.statusCode,
+        "Serverga ulanib bo'lmadi (${uri.host}:${uri.port})"
+        "${details.isEmpty ? '' : ': $details'}",
+      );
+    } on HandshakeException {
+      throw AuthApiException(
+        "SSL xatosi (${uri.host}:${uri.port}). API_BASE_URL noto'g'ri bo'lishi mumkin.",
+      );
+    } on HttpException catch (e) {
+      throw AuthApiException(
+        "HTTP xato (${uri.host}:${uri.port}): ${e.message}",
       );
     }
-    return decoded;
+  }
+
+  Future<Map<String, dynamic>> _delete(
+    String path, {
+    required String accessToken,
+    required Map<String, dynamic> body,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+    try {
+      _client.connectionTimeout ??= _requestTimeout;
+      final request = await _client.deleteUrl(uri).timeout(_requestTimeout);
+      request.headers.contentType = ContentType.json;
+      request.headers.set(
+        HttpHeaders.authorizationHeader,
+        'Bearer $accessToken',
+      );
+      request.write(jsonEncode(body));
+
+      final response = await request.close().timeout(_requestTimeout);
+      final rawBody = await response
+          .transform(utf8.decoder)
+          .join()
+          .timeout(_requestTimeout);
+      final decoded = _decodeJson(rawBody);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw AuthApiException(
+          decoded['error']?.toString() ??
+              decoded['message']?.toString() ??
+              'Server xatosi',
+          statusCode: response.statusCode,
+        );
+      }
+      return decoded;
+    } on TimeoutException {
+      throw const AuthApiException('Server javob bermadi (timeout)');
+    } on SocketException catch (e) {
+      final details = (e.osError?.message ?? '').trim();
+      throw AuthApiException(
+        "Serverga ulanib bo'lmadi (${uri.host}:${uri.port})"
+        "${details.isEmpty ? '' : ': $details'}",
+      );
+    } on HandshakeException {
+      throw AuthApiException(
+        "SSL xatosi (${uri.host}:${uri.port}). API_BASE_URL noto'g'ri bo'lishi mumkin.",
+      );
+    } on HttpException catch (e) {
+      throw AuthApiException(
+        "HTTP xato (${uri.host}:${uri.port}): ${e.message}",
+      );
+    }
   }
 
   Map<String, dynamic> _decodeJson(String rawBody) {

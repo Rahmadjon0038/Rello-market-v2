@@ -9,6 +9,7 @@ import 'package:hello_flutter_app/services/product_api_service.dart';
 import 'package:hello_flutter_app/widgets/category_icon.dart';
 import 'package:hello_flutter_app/widgets/product_card.dart';
 import 'package:hello_flutter_app/widgets/product_image.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeHeader extends StatefulWidget {
   final bool showContent;
@@ -30,6 +31,7 @@ class _HomeHeaderState extends State<HomeHeader>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   bool _showSearch = false;
   String _selectedLang = "UZ";
+  static const String _langPrefKey = 'ui_lang';
   String? _selectedCategoryId;
   bool _isLoadingProducts = true;
   String? _productsError;
@@ -49,6 +51,7 @@ class _HomeHeaderState extends State<HomeHeader>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadSession();
+    _loadLang();
     _loadHomeData();
   }
 
@@ -56,6 +59,38 @@ class _HomeHeaderState extends State<HomeHeader>
     final session = await _authApi.loadSavedSession();
     if (!mounted) return;
     setState(() => _session = session);
+  }
+
+  Future<void> _loadLang() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = (prefs.getString(_langPrefKey) ?? '').trim();
+      if (!mounted) return;
+      if (saved.isEmpty) return;
+      setState(() => _selectedLang = saved);
+    } on Object {
+      // best-effort
+    }
+  }
+
+  Future<void> _setLang(String value) async {
+    setState(() => _selectedLang = value);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_langPrefKey, value);
+    } on Object {
+      // best-effort
+    }
+  }
+
+  String _langFlagAsset() {
+    return switch (_selectedLang) {
+      'EN' => 'assets/en.png',
+      'RU' => 'assets/ru.png',
+      // Uzbek Latin / Uzbek Cyrillic both use the same flag asset.
+      'UZ_CYR' => 'assets/uz.png',
+      _ => 'assets/uz.png',
+    };
   }
 
   @override
@@ -125,7 +160,27 @@ class _HomeHeaderState extends State<HomeHeader>
                     value: "UZ",
                     selected: _selectedLang == "UZ",
                     onTap: () {
-                      setState(() => _selectedLang = "UZ");
+                      _setLang("UZ");
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _LangOption(
+                    label: "Ўзбекча (кирилл)",
+                    value: "UZ_CYR",
+                    selected: _selectedLang == "UZ_CYR",
+                    onTap: () {
+                      _setLang("UZ_CYR");
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _LangOption(
+                    label: "Русский",
+                    value: "RU",
+                    selected: _selectedLang == "RU",
+                    onTap: () {
+                      _setLang("RU");
                       Navigator.pop(ctx);
                     },
                   ),
@@ -135,7 +190,7 @@ class _HomeHeaderState extends State<HomeHeader>
                     value: "EN",
                     selected: _selectedLang == "EN",
                     onTap: () {
-                      setState(() => _selectedLang = "EN");
+                      _setLang("EN");
                       Navigator.pop(ctx);
                     },
                   ),
@@ -381,9 +436,8 @@ class _HomeHeaderState extends State<HomeHeader>
                 _HeaderIconButton(
                   onTap: _openLanguageSheet,
                   child: _LangFlag(
-                    assetPath: _selectedLang == "UZ"
-                        ? 'assets/uz.png'
-                        : 'assets/en.png',
+                    assetPath: _langFlagAsset(),
+                    fallbackText: _selectedLang,
                   ),
                 ),
               ],
@@ -617,8 +671,9 @@ class _HomeHeaderState extends State<HomeHeader>
 
 class _LangFlag extends StatelessWidget {
   final String assetPath;
+  final String fallbackText;
 
-  const _LangFlag({required this.assetPath});
+  const _LangFlag({required this.assetPath, this.fallbackText = 'LANG'});
 
   @override
   Widget build(BuildContext context) {
@@ -635,9 +690,9 @@ class _LangFlag extends StatelessWidget {
             height: 18,
             color: const Color(0xFFE6E9E8),
             alignment: Alignment.center,
-            child: const Text(
-              'UZ',
-              style: TextStyle(
+            child: Text(
+              fallbackText,
+              style: const TextStyle(
                 color: Color(0xFF1F5A50),
                 fontSize: 8,
                 fontWeight: FontWeight.w700,
@@ -697,6 +752,14 @@ class _LangOption extends StatelessWidget {
   final String value;
   final bool selected;
   final VoidCallback onTap;
+  static String _flagAsset(String value) {
+    return switch (value) {
+      'EN' => 'assets/en.png',
+      'RU' => 'assets/ru.png',
+      'UZ_CYR' => 'assets/uz.png',
+      _ => 'assets/uz.png',
+    };
+  }
 
   const _LangOption({
     required this.label,
@@ -723,7 +786,8 @@ class _LangOption extends StatelessWidget {
         child: Row(
           children: [
             _LangFlag(
-              assetPath: value == "UZ" ? 'assets/uz.png' : 'assets/en.png',
+              assetPath: _flagAsset(value),
+              fallbackText: value,
             ),
             const SizedBox(width: 10),
             Text(

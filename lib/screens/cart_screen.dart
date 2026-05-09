@@ -6,6 +6,8 @@ import 'package:hello_flutter_app/screens/pick_location_screen.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/order_api_service.dart';
 import 'package:hello_flutter_app/services/product_api_service.dart';
+import 'package:hello_flutter_app/utils/text_utils.dart';
+import 'package:hello_flutter_app/widgets/color_chip.dart';
 import 'package:hello_flutter_app/widgets/product_image.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -1204,21 +1206,31 @@ class _CartScreenState extends State<CartScreen> {
 class _CartItem {
   final String id;
   final String name;
+  final String description;
   final int price;
   final int qty;
   final bool selected;
   final String imagePath;
   final List<String> images;
+  final String brand;
+  final String categoryName;
+  final List<String> sizes;
+  final List<String> colors;
   final String storeId;
 
   const _CartItem({
     required this.id,
     required this.name,
+    required this.description,
     required this.price,
     required this.qty,
     required this.selected,
     required this.imagePath,
     required this.images,
+    required this.brand,
+    required this.categoryName,
+    required this.sizes,
+    required this.colors,
     required this.storeId,
   });
 
@@ -1230,11 +1242,16 @@ class _CartItem {
     return _CartItem(
       id: product.id,
       name: product.name,
+      description: product.description,
       price: product.price,
       qty: product.cartQty > 0 ? product.cartQty : 1,
       selected: product.selected,
       imagePath: previewImage,
       images: resolvedImages.isNotEmpty ? resolvedImages : [previewImage],
+      brand: product.brand,
+      categoryName: product.categoryName,
+      sizes: product.sizes,
+      colors: product.colors,
       storeId: product.storeId,
     );
   }
@@ -1243,11 +1260,16 @@ class _CartItem {
     return _CartItem(
       id: id,
       name: name,
+      description: description,
       price: price,
       qty: qty ?? this.qty,
       selected: selected ?? this.selected,
       imagePath: imagePath,
       images: images,
+      brand: brand,
+      categoryName: categoryName,
+      sizes: sizes,
+      colors: colors,
       storeId: storeId,
     );
   }
@@ -1283,6 +1305,8 @@ class _CartCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
     const softGray = Color(0xFFF6F7F8);
+    const descriptionColor = Color(0xFF1F2933);
+    final descriptionPreview = truncateWords(item.description, maxWords: 26);
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -1343,6 +1367,44 @@ class _CartCard extends StatelessWidget {
                         fontSize: 12,
                       ),
                     ),
+                    if (descriptionPreview.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        descriptionPreview,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: descriptionColor.withValues(alpha: 0.72),
+                          fontSize: 12,
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
+                    if (item.categoryName.trim().isNotEmpty ||
+                        item.brand.trim().isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          if (item.categoryName.trim().isNotEmpty)
+                            _MiniChip(text: item.categoryName.trim()),
+                          if (item.brand.trim().isNotEmpty)
+                            _MiniChip(text: item.brand.trim()),
+                        ],
+                      ),
+                    ],
+                    if (item.colors.isNotEmpty || item.sizes.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          ...item.colors.map((c) => ColorChip(label: c)),
+                          ...item.sizes.map((s) => _MiniChip(text: s)),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -1431,6 +1493,35 @@ class _QtyButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         onTap: onTap,
         child: Icon(icon, size: 16, color: primaryGreen),
+      ),
+    );
+  }
+}
+
+class _MiniChip extends StatelessWidget {
+  final String text;
+
+  const _MiniChip({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+    final t = text.trim();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F8FA),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+      ),
+      child: Text(
+        t,
+        style: TextStyle(
+          color: primaryGreen.withValues(alpha: 0.85),
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          height: 1.0,
+        ),
       ),
     );
   }

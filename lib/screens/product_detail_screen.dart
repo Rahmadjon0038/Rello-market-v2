@@ -4,6 +4,7 @@ import 'package:hello_flutter_app/models/store_summary.dart';
 import 'package:hello_flutter_app/screens/store_products_screen.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/product_api_service.dart';
+import 'package:hello_flutter_app/widgets/color_chip.dart';
 import 'package:hello_flutter_app/widgets/product_image.dart';
 
 class ProductDetailScreen extends StatefulWidget {
@@ -307,6 +308,63 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
           ],
         ),
+        if (product.colors.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          const Text(
+            'Ranglar',
+            style: TextStyle(
+              color: primaryGreen,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: product.colors.map((c) => ColorChip(label: c)).toList(),
+          ),
+        ],
+        if (product.sizes.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          const Text(
+            'Razmerlar',
+            style: TextStyle(
+              color: primaryGreen,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: product.sizes
+                .map(
+                  (s) => Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7F8FA),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: Colors.black.withValues(alpha: 0.08),
+                      ),
+                    ),
+                    child: Text(
+                      s,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ],
         const SizedBox(height: 18),
         const Text(
           'Tavsif',

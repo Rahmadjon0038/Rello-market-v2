@@ -72,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       bottomNavigationBar: HomeBottomBar(
         currentIndex: _currentIndex,
         favoriteCount: _summary.favoriteCount,

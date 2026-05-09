@@ -7,19 +7,19 @@ Bu hujjat user uchun **buyurtma yaratish** va **“Mening buyurtmalarim”** bo�
 Base URL:
 
 ```txt
-http://localhost:3000
+https://rello-market.taraqqiyot-teaching-center.uz
 ```
 
 Swagger UI:
 
 ```txt
-http://localhost:3000/docs
+https://rello-market.taraqqiyot-teaching-center.uz/docs
 ```
 
 OpenAPI JSON:
 
 ```txt
-http://localhost:3000/openapi.json
+https://rello-market.taraqqiyot-teaching-center.uz/openapi.json
 ```
 
 ## 1) Flow (mobile)
@@ -251,4 +251,3 @@ PATCH /me/stores/:id/orders/:orderId/accept
 PATCH /me/stores/:id/orders/:orderId/reject
 PATCH /me/stores/:id/orders/:orderId/delivered
 ```
-
