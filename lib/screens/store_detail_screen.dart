@@ -7,6 +7,7 @@ import 'package:hello_flutter_app/models/store.dart';
 import 'package:hello_flutter_app/models/store_details.dart';
 import 'package:hello_flutter_app/screens/seller_product_management_screen.dart';
 import 'package:hello_flutter_app/screens/store_orders_screen.dart';
+import 'package:hello_flutter_app/screens/store_reports_screen.dart';
 import 'package:hello_flutter_app/screens/store_statistics_screen.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/store_api_service.dart';
@@ -260,26 +261,34 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
         },
         indicatorColor: const Color(0xFFE6F4EF),
         backgroundColor: Colors.white,
-        destinations: const [
-          NavigationDestination(
+        destinations: [
+          const NavigationDestination(
             icon: Icon(Icons.home_outlined, color: ink),
             selectedIcon: Icon(Icons.home_rounded, color: primaryGreen),
             label: "Do'kon",
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.inventory_2_outlined, color: ink),
             selectedIcon: Icon(Icons.inventory_2_rounded, color: primaryGreen),
             label: 'Mahsulotlar',
           ),
           NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined, color: ink),
-            selectedIcon: Icon(Icons.receipt_long_rounded, color: primaryGreen),
+            icon: _NavIconBadge(
+              icon: Icons.receipt_long_outlined,
+              color: ink,
+              count: _store?.badges.orders ?? 0,
+            ),
+            selectedIcon: _NavIconBadge(
+              icon: Icons.receipt_long_rounded,
+              color: primaryGreen,
+              count: _store?.badges.orders ?? 0,
+            ),
             label: 'Buyurtmalar',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.query_stats_outlined, color: ink),
-            selectedIcon: Icon(Icons.query_stats_rounded, color: primaryGreen),
-            label: 'Statistika',
+          const NavigationDestination(
+            icon: Icon(Icons.pie_chart_outline_rounded, color: ink),
+            selectedIcon: Icon(Icons.pie_chart_rounded, color: primaryGreen),
+            label: 'Hisobot',
           ),
         ],
       ),
@@ -306,8 +315,12 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                   onShowImage: _showImage,
                 ),
                 SellerProductManagementScreen(storeId: widget.storeId),
-                StoreOrdersScreen(storeId: widget.storeId),
-                StoreStatisticsScreen(
+                StoreOrdersScreen(
+                  storeId: widget.storeId,
+                  onOrdersSeen: _load,
+                  active: _navIndex == 2,
+                ),
+                StoreReportsScreen(
                   storeId: widget.storeId,
                   storeName: _store!.name,
                 ),
@@ -1344,6 +1357,42 @@ class _AppBarCircleButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _NavIconBadge extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final int count;
+
+  const _NavIconBadge({
+    required this.icon,
+    required this.color,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(icon, color: color),
+        if (count > 0)
+          Positioned(
+            right: -2,
+            top: -2,
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE11D48),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.white, width: 1.5),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

@@ -40,6 +40,19 @@ class PushApiService {
     return true;
   }
 
+  Future<bool> unregisterDeviceTokenWithAccessToken({
+    required String token,
+    required String accessToken,
+  }) async {
+    if (accessToken.trim().isEmpty) return false;
+    await _delete(
+      '/push/token',
+      accessToken: accessToken.trim(),
+      body: {'token': token},
+    );
+    return true;
+  }
+
   Future<Map<String, dynamic>> sendTestPush({
     String? title,
     String? body,
@@ -55,7 +68,11 @@ class PushApiService {
       if ((body ?? '').trim().isNotEmpty) 'body': body!.trim(),
       if (data != null && data.isNotEmpty) 'data': data,
     };
-    return await _post('/push/test', accessToken: session.accessToken, body: payload);
+    return await _post(
+      '/push/test',
+      accessToken: session.accessToken,
+      body: payload,
+    );
   }
 
   Future<Map<String, dynamic>> _post(

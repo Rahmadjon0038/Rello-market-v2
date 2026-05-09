@@ -16,6 +16,8 @@ class Product {
   final String brand;
   final List<String> sizes;
   final List<String> colors;
+  final String cartSize;
+  final String cartColor;
   final bool isCarousel;
   final bool isActive;
   final bool isLiked;
@@ -39,6 +41,8 @@ class Product {
     required this.brand,
     this.sizes = const [],
     this.colors = const [],
+    this.cartSize = '',
+    this.cartColor = '',
     required this.isCarousel,
     required this.isActive,
     required this.isLiked,
@@ -80,6 +84,16 @@ class Product {
 
     final sizes = _stringListFromJson(json['sizes']);
     final colors = _stringListFromJson(json['colors']);
+    final cartSize =
+        json['cartSize']?.toString() ??
+        json['selectedSize']?.toString() ??
+        json['size']?.toString() ??
+        '';
+    final cartColor =
+        json['cartColor']?.toString() ??
+        json['selectedColor']?.toString() ??
+        json['color']?.toString() ??
+        '';
 
     return Product(
       id: json['id']?.toString() ?? '',
@@ -94,6 +108,8 @@ class Product {
       brand: json['brand']?.toString() ?? '',
       sizes: sizes,
       colors: colors,
+      cartSize: cartSize.trim(),
+      cartColor: cartColor.trim(),
       isCarousel: json['isCarousel'] is bool
           ? json['isCarousel'] as bool
           : false,
@@ -119,6 +135,8 @@ class Product {
     StoreSummary? store,
     List<String>? sizes,
     List<String>? colors,
+    String? cartSize,
+    String? cartColor,
   }) {
     return Product(
       id: id,
@@ -133,6 +151,8 @@ class Product {
       brand: brand,
       sizes: sizes ?? this.sizes,
       colors: colors ?? this.colors,
+      cartSize: cartSize ?? this.cartSize,
+      cartColor: cartColor ?? this.cartColor,
       isCarousel: isCarousel,
       isActive: isActive,
       isLiked: isLiked ?? this.isLiked,

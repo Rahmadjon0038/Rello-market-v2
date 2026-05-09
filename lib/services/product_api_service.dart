@@ -299,12 +299,23 @@ class ProductApiService {
     return data['isLiked'] is bool ? data['isLiked'] as bool : false;
   }
 
-  Future<int> addToCart(String id, {int qty = 1, bool selected = true}) async {
+  Future<int> addToCart(
+    String id, {
+    int qty = 1,
+    bool selected = true,
+    String? selectedSize,
+    String? selectedColor,
+  }) async {
+    final body = <String, dynamic>{'qty': qty, 'selected': selected};
+    final size = selectedSize?.trim() ?? '';
+    final color = selectedColor?.trim() ?? '';
+    if (size.isNotEmpty) body['selectedSize'] = size;
+    if (color.isNotEmpty) body['selectedColor'] = color;
     final data = await _send(
       'POST',
       '/products/$id/cart',
       authRequired: true,
-      body: {'qty': qty, 'selected': selected},
+      body: body,
     );
     final nextQty = data['qty'];
     if (nextQty is int) return nextQty;

@@ -1,4 +1,5 @@
 import 'package:hello_flutter_app/models/seller.dart';
+import 'package:hello_flutter_app/models/store_badges.dart';
 
 class StoreModel {
   final String id;
@@ -7,6 +8,7 @@ class StoreModel {
   final String name;
   final String imagePath;
   final String description;
+  final StoreBadges badges;
   final bool isActive;
   final bool isNew;
   final String? newBadgeText;
@@ -21,6 +23,7 @@ class StoreModel {
     required this.name,
     required this.imagePath,
     required this.description,
+    required this.badges,
     required this.isActive,
     required this.isNew,
     required this.newBadgeText,
@@ -38,6 +41,7 @@ class StoreModel {
       name: json['name']?.toString() ?? '',
       imagePath: json['imagePath']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
+      badges: StoreBadges.fromJson(json['badges']),
       isActive: json['isActive'] is bool ? json['isActive'] as bool : false,
       isNew: json['isNew'] == true,
       newBadgeText: json['newBadgeText']?.toString(),

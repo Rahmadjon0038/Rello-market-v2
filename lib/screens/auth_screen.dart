@@ -683,7 +683,7 @@ class _AuthScreenState extends State<AuthScreen>
                           SizedBox(height: isCompact ? 6 : 10),
                         if (!keyboardOpen && !isRegisterFlowStep)
                           Image.asset(
-                            'assets/auth1.png',
+                            'assets/auth.png',
                             height: imageHeight,
                             width: double.infinity,
                             fit: BoxFit.contain,
@@ -1305,7 +1305,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         if (!keyboardOpen) ...[
                           SizedBox(height: isCompact ? 10 : 18),
                           Image.asset(
-                            'assets/auth1.png',
+                            'assets/auth.png',
                             height: imageHeight,
                             width: double.infinity,
                             fit: BoxFit.contain,

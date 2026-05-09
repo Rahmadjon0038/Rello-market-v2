@@ -7,8 +7,15 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 class StoreOrdersScreen extends StatefulWidget {
   final String storeId;
+  final VoidCallback? onOrdersSeen;
+  final bool active;
 
-  const StoreOrdersScreen({super.key, required this.storeId});
+  const StoreOrdersScreen({
+    super.key,
+    required this.storeId,
+    this.onOrdersSeen,
+    this.active = true,
+  });
 
   @override
   State<StoreOrdersScreen> createState() => _StoreOrdersScreenState();
@@ -21,14 +28,29 @@ class _StoreOrdersScreenState extends State<StoreOrdersScreen> {
   bool _loading = true;
   bool _updating = false;
   String? _error;
+  List<OrderModel> _allOrders = const [];
   List<OrderModel> _orders = const [];
+  String? _statusFilter;
   final Map<String, String> _deliveryCodes = {};
   final Map<String, TextEditingController> _deliveryCodeCtrls = {};
 
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.active) {
+      _load();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant StoreOrdersScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.active && widget.active) {
+      _load();
+    }
+    if (oldWidget.storeId != widget.storeId && widget.active) {
+      _load();
+    }
   }
 
   @override
@@ -49,6 +71,26 @@ class _StoreOrdersScreenState extends State<StoreOrdersScreen> {
 
   bool _isSixDigits(String v) => RegExp(r'^\d{6}$').hasMatch(v);
 
+  String _normalizeStatus(String raw) {
+    final s = raw.trim().toLowerCase();
+    return switch (s) {
+      'shipped' => 'delivering',
+      'completed' => 'delivered',
+      _ => s,
+    };
+  }
+
+  void _applyFilter() {
+    final filter = _statusFilter;
+    if (filter == null) {
+      _orders = _allOrders;
+      return;
+    }
+    _orders = _allOrders
+        .where((o) => _normalizeStatus(o.status) == filter)
+        .toList();
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -58,9 +100,11 @@ class _StoreOrdersScreenState extends State<StoreOrdersScreen> {
       final orders = await _api.getStoreOrders(widget.storeId);
       if (!mounted) return;
       setState(() {
-        _orders = orders;
+        _allOrders = orders;
+        _applyFilter();
         _loading = false;
       });
+      widget.onOrdersSeen?.call();
     } on AuthApiException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -102,13 +146,15 @@ class _StoreOrdersScreenState extends State<StoreOrdersScreen> {
     switch (status.trim().toLowerCase()) {
       case 'pending':
         return 'Kutilmoqda';
+      case 'preparing':
+        return 'Tayyorlanmoqda';
       case 'rejected':
         return 'Rad etildi';
       case 'delivering':
       case 'shipped':
-        return 'Yetkazilmoqda';
+        return 'Tayyor';
       case 'delivered':
-        return 'Yetkazildi';
+        return 'Yetkazib berildi';
       case 'canceled':
         return 'Bekor qilindi';
       default:
@@ -132,6 +178,15 @@ class _StoreOrdersScreenState extends State<StoreOrdersScreen> {
     }
   }
 
+  void _applyUpdatedOrder(OrderModel updated) {
+    _allOrders = _allOrders
+        .map((o) => o.id == updated.id ? updated : o)
+        .toList();
+    // If for some reason the updated order isn't in the list, keep the old list
+    // unchanged (best-effort).
+    _applyFilter();
+  }
+
   Future<void> _accept(OrderModel order) async {
     if (_updating) return;
     setState(() => _updating = true);
@@ -142,7 +197,7 @@ class _StoreOrdersScreenState extends State<StoreOrdersScreen> {
       );
       if (!mounted) return;
       setState(() {
-        _orders = _orders.map((o) => o.id == updated.id ? updated : o).toList();
+        _applyUpdatedOrder(updated);
       });
       _showSnack("Buyurtma qabul qilindi");
     } on AuthApiException catch (error) {
@@ -164,9 +219,31 @@ class _StoreOrdersScreenState extends State<StoreOrdersScreen> {
       );
       if (!mounted) return;
       setState(() {
-        _orders = _orders.map((o) => o.id == updated.id ? updated : o).toList();
+        _applyUpdatedOrder(updated);
       });
       _showSnack("Buyurtma rad etildi");
+    } on AuthApiException catch (error) {
+      _showSnack(error.message);
+    } on Object {
+      _showSnack("Server bilan bog'lanib bo'lmadi");
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
+  }
+
+  Future<void> _markReady(OrderModel order) async {
+    if (_updating) return;
+    setState(() => _updating = true);
+    try {
+      final updated = await _api.markDelivering(
+        storeId: widget.storeId,
+        orderId: order.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _applyUpdatedOrder(updated);
+      });
+      _showSnack("Buyurtma tayyor deb belgilandi");
     } on AuthApiException catch (error) {
       _showSnack(error.message);
     } on Object {
@@ -187,7 +264,7 @@ class _StoreOrdersScreenState extends State<StoreOrdersScreen> {
       );
       if (!mounted) return;
       setState(() {
-        _orders = _orders.map((o) => o.id == updated.id ? updated : o).toList();
+        _applyUpdatedOrder(updated);
       });
       _showSnack("Yetkazildi deb belgilandi");
     } on AuthApiException catch (error) {
@@ -233,37 +310,109 @@ class _StoreOrdersScreenState extends State<StoreOrdersScreen> {
     );
   }
 
-  Widget _header(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+  Widget _filters() {
+    final items = const <({String label, String? status})>[
+      (label: 'Hammasi', status: null),
+      (label: 'Yangi', status: 'preparing'),
+      (label: 'Tayyor', status: 'delivering'),
+      (label: 'Yetkazildi', status: 'delivered'),
+    ];
+
+    int countFor(String? status) {
+      if (status == null) return _allOrders.length;
+      return _allOrders
+          .where((o) => _normalizeStatus(o.status) == status)
+          .length;
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Row(
-        children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () => Navigator.of(context).maybePop(),
-            child: const Padding(
-              padding: EdgeInsets.all(6),
-              child: Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: primaryGreen,
-                size: 28,
+        children: items.map((it) {
+          final selected = _statusFilter == it.status;
+          final color = switch (it.status) {
+            'preparing' => const Color(0xFF2563EB), // blue
+            'delivering' => const Color(0xFFB45309), // orange
+            'delivered' => const Color(0xFF16A34A), // green
+            _ => primaryGreen,
+          };
+          final count = countFor(it.status);
+          final label = '${it.label} ($count)';
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              selected: selected,
+              label: Text(label),
+              onSelected: (v) {
+                if (!mounted) return;
+                final next = v ? it.status : null;
+                if (_statusFilter == next) return;
+                setState(() {
+                  _statusFilter = next;
+                  _applyFilter();
+                });
+              },
+              selectedColor: color.withValues(alpha: 0.22),
+              backgroundColor: color.withValues(alpha: 0.10),
+              side: BorderSide(
+                color: color.withValues(alpha: selected ? 0.42 : 0.18),
               ),
-            ),
-          ),
-          const Expanded(
-            child: Text(
-              'Buyurtmalar',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: primaryGreen,
-                fontSize: 22,
+              labelStyle: TextStyle(
+                color: color,
                 fontWeight: FontWeight.w900,
+                fontSize: 12,
+                height: 1.0,
               ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
             ),
-          ),
-          const SizedBox(width: 40),
-        ],
+          );
+        }).toList(),
       ),
+    );
+  }
+
+  Widget _header(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(
+            children: [
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => Navigator.of(context).maybePop(),
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: primaryGreen,
+                    size: 28,
+                  ),
+                ),
+              ),
+              const Expanded(
+                child: Text(
+                  'Buyurtmalar',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: primaryGreen,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 40),
+            ],
+          ),
+        ),
+        _filters(),
+      ],
     );
   }
 
@@ -340,6 +489,7 @@ class _StoreOrdersScreenState extends State<StoreOrdersScreen> {
 
                   final status = o.status.trim().toLowerCase();
                   final canAcceptOrReject = status == 'pending';
+                  final canMarkReady = status == 'preparing';
                   final canMarkDelivered =
                       status == 'delivering' || status == 'shipped';
 
@@ -397,6 +547,40 @@ class _StoreOrdersScreenState extends State<StoreOrdersScreen> {
                             ),
                           ],
                         ),
+                        if (canMarkReady) ...[
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: _updating ? null : () => _markReady(o),
+                              icon: const Icon(Icons.local_shipping_rounded),
+                              label: const Text('Buyurtma tayyor'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFFB45309),
+                                backgroundColor: const Color(
+                                  0xFFF59E0B,
+                                ).withValues(alpha: 0.10),
+                                minimumSize: const Size.fromHeight(38),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 9,
+                                ),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                textStyle: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                                side: BorderSide(
+                                  color: const Color(
+                                    0xFFF59E0B,
+                                  ).withValues(alpha: 0.35),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 10),
                         Container(
                           width: double.infinity,
@@ -672,13 +856,41 @@ class _StoreOrdersScreenState extends State<StoreOrdersScreen> {
                                             ),
                                           ),
                                         ),
-                                        suffixIcon: IconButton(
-                                          tooltip: 'Tasdiqlash',
-                                          onPressed: canConfirm
-                                              ? () => _markDelivered(o, code)
-                                              : null,
-                                          icon: const Icon(
-                                            Icons.check_circle_rounded,
+                                        suffixIconConstraints:
+                                            const BoxConstraints(
+                                              minHeight: 40,
+                                              minWidth: 48,
+                                            ),
+                                        suffixIcon: Padding(
+                                          padding: const EdgeInsets.only(
+                                            right: 6,
+                                          ),
+                                          child: Material(
+                                            color: canConfirm
+                                                ? primaryGreen
+                                                : primaryGreen.withValues(
+                                                    alpha: 0.25,
+                                                  ),
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                            child: InkWell(
+                                              onTap: canConfirm
+                                                  ? () =>
+                                                        _markDelivered(o, code)
+                                                  : null,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              child: const SizedBox(
+                                                width: 42,
+                                                height: 40,
+                                                child: Icon(
+                                                  Icons.check_rounded,
+                                                  color: Colors.white,
+                                                  size: 22,
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),

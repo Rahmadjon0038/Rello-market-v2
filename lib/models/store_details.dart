@@ -1,4 +1,5 @@
 import 'package:hello_flutter_app/models/seller.dart';
+import 'package:hello_flutter_app/models/store_badges.dart';
 
 class StoreDetails {
   final String id;
@@ -16,6 +17,7 @@ class StoreDetails {
   final String? deliveryArea;
   final num? deliveryPrice;
   final List<String> bannerImages;
+  final StoreBadges badges;
   final bool isActive;
   final bool isNew;
   final String? newBadgeText;
@@ -39,6 +41,7 @@ class StoreDetails {
     required this.deliveryArea,
     required this.deliveryPrice,
     required this.bannerImages,
+    required this.badges,
     required this.isActive,
     required this.isNew,
     required this.newBadgeText,
@@ -81,6 +84,7 @@ class StoreDetails {
                 .where((e) => e.trim().isNotEmpty)
                 .toList()
           : const [],
+      badges: StoreBadges.fromJson(json['badges']),
       isActive: json['isActive'] == true,
       isNew: json['isNew'] == true,
       newBadgeText: json['newBadgeText']?.toString(),

@@ -6,6 +6,7 @@ import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/order_api_service.dart';
 import 'package:hello_flutter_app/services/product_api_service.dart';
 import 'package:hello_flutter_app/widgets/product_image.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -16,6 +17,7 @@ class OrdersScreen extends StatefulWidget {
 
 class _OrdersScreenState extends State<OrdersScreen> {
   static const primaryGreen = Color(0xFF1F5A50);
+  static const _readySeenAtKey = 'user_orders_ready_seen_at_ms';
   final OrderApiService _orderApi = OrderApiService();
   final ProductApiService _productApi = ProductApiService();
 
@@ -27,7 +29,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   void initState() {
     super.initState();
+    _markReadyBadgeSeen();
     _load();
+  }
+
+  Future<void> _markReadyBadgeSeen() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(
+        _readySeenAtKey,
+        DateTime.now().millisecondsSinceEpoch,
+      );
+    } on Object {
+      // best-effort
+    }
   }
 
   Future<void> _load() async {
@@ -98,15 +113,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
     switch (status.trim().toLowerCase()) {
       case 'pending':
         return 'Kutilmoqda';
+      case 'preparing':
+        return 'Tayyorlanmoqda';
       case 'accepted':
       case 'confirmed':
         return 'Qabul qilindi';
       case 'delivering':
       case 'shipped':
-        return 'Yetkazilmoqda';
+        return 'Tayyor';
       case 'completed':
       case 'delivered':
-        return 'Yakunlandi';
+        return 'Buyurtma olindi';
       case 'rejected':
         return 'Rad etildi';
       case 'canceled':
@@ -192,7 +209,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     final statusLabel = _statusLabel(o.status);
                     final storeLabel = _storeNames[o.storeId] ?? o.storeId;
                     final firstItem = o.items.isNotEmpty ? o.items.first : null;
-                    final acceptedDate = _dateLabel(o.createdAt);
+                    final status = o.status.trim().toLowerCase();
+                    final readyStatuses = {
+                      'delivering',
+                      'shipped',
+                      'delivered',
+                      'completed',
+                    };
+                    final readyDate = _dateLabel(
+                      readyStatuses.contains(status)
+                          ? o.updatedAt
+                          : o.createdAt,
+                    );
+                    final canPickup =
+                        status == 'delivering' || status == 'shipped';
                     return InkWell(
                       borderRadius: BorderRadius.circular(14),
                       onTap: () {
@@ -304,10 +334,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      if (acceptedDate.isNotEmpty) ...[
+                                      if (readyDate.isNotEmpty) ...[
                                         const SizedBox(height: 5),
                                         Text(
-                                          'Buyurtma qabul qilingan sana: $acceptedDate',
+                                          "Buyurtma tayyor bo'lgan sana: $readyDate",
                                           style: const TextStyle(
                                             color: Color(0xFF6F7F7B),
                                             fontSize: 11.5,
@@ -365,6 +395,48 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   color: Color(0xFF8A9A97),
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                            if (canPickup) ...[
+                              const SizedBox(height: 10),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            OrderDetailScreen(orderId: o.id),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.qr_code_2_rounded),
+                                  label: const Text("Buyurtmani olish"),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFFB45309),
+                                    backgroundColor: const Color(
+                                      0xFFF59E0B,
+                                    ).withValues(alpha: 0.10),
+                                    minimumSize: const Size.fromHeight(40),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 10,
+                                    ),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    textStyle: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                    side: BorderSide(
+                                      color: const Color(
+                                        0xFFF59E0B,
+                                      ).withValues(alpha: 0.35),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],

@@ -87,7 +87,10 @@ class _MyStoresScreenState extends State<MyStoresScreen> {
                       ..._stores.map(
                         (store) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
-                          child: _StoreTile(store: store),
+                          child: _StoreTile(
+                            store: store,
+                            onReturn: _loadStores,
+                          ),
                         ),
                       ),
                   ],
@@ -100,12 +103,14 @@ class _MyStoresScreenState extends State<MyStoresScreen> {
 
 class _StoreTile extends StatelessWidget {
   final StoreModel store;
+  final VoidCallback? onReturn;
 
-  const _StoreTile({required this.store});
+  const _StoreTile({required this.store, this.onReturn});
 
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
+    final ordersBadgeCount = store.badges.orders;
 
     return Material(
       color: Colors.white,
@@ -113,90 +118,143 @@ class _StoreTile extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) =>
-                  StoreDetailScreen(storeId: store.id, initialStore: store),
-            ),
-          );
+          Navigator.of(context)
+              .push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      StoreDetailScreen(storeId: store.id, initialStore: store),
+                ),
+              )
+              .then((_) => onReturn?.call());
         },
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: primaryGreen.withValues(alpha: 0.12)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 14,
-                offset: const Offset(0, 7),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: primaryGreen.withValues(alpha: 0.12)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 14,
+                    offset: const Offset(0, 7),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE6F4EF),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.storefront_rounded,
-                  color: primaryGreen,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              child: Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE6F4EF),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.storefront_rounded,
+                      color: primaryGreen,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            store.name.isEmpty ? "Do'kon" : store.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: primaryGreen,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                store.name.isEmpty ? "Do'kon" : store.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: primaryGreen,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
                             ),
+                            if (store.isNew) ...[
+                              const SizedBox(width: 8),
+                              _NewStoreBadge(
+                                text: store.newBadgeText ?? "Yangi do'kon",
+                              ),
+                            ],
+                            if (ordersBadgeCount > 0) ...[
+                              const SizedBox(width: 8),
+                              _OrdersBadge(count: ordersBadgeCount),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          store.description.isEmpty
+                              ? 'Tavsif yo‘q'
+                              : store.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: primaryGreen.withValues(alpha: 0.68),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (store.isNew) ...[
-                          const SizedBox(width: 8),
-                          _NewStoreBadge(
-                            text: store.newBadgeText ?? "Yangi do'kon",
-                          ),
-                        ],
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      store.description.isEmpty
-                          ? 'Tavsif yo‘q'
-                          : store.description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: primaryGreen.withValues(alpha: 0.68),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: primaryGreen.withValues(alpha: 0.7),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: primaryGreen.withValues(alpha: 0.7),
+            ),
+            if (ordersBadgeCount > 0)
+              Positioned(
+                right: 10,
+                top: 10,
+                child: _CornerCountBadge(count: ordersBadgeCount),
               ),
-            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CornerCountBadge extends StatelessWidget {
+  final int count;
+
+  const _CornerCountBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count > 99 ? '99+' : '$count';
+    return Container(
+      constraints: const BoxConstraints(minWidth: 18),
+      height: 18,
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE11D48),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
         ),
       ),
     );
@@ -228,6 +286,46 @@ class _NewStoreBadge extends StatelessWidget {
             text,
             style: const TextStyle(
               color: accent,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrdersBadge extends StatelessWidget {
+  final int count;
+
+  const _OrdersBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count > 99 ? '99+' : '$count';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE11D48).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: const Color(0xFFE11D48).withValues(alpha: 0.25),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.receipt_long_rounded,
+            color: Color(0xFFE11D48),
+            size: 13,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFFE11D48),
               fontSize: 11,
               fontWeight: FontWeight.w900,
             ),

@@ -153,5 +153,9 @@ class PushTokenManager {
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp();
+  } on Object {
+    // Best-effort; background handler should never crash the isolate.
+  }
 }

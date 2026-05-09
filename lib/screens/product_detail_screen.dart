@@ -26,6 +26,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   String? _error;
   int _imageIndex = 0;
   bool _isOwnProduct = false;
+  String? _selectedSize;
+  String? _selectedColor;
 
   @override
   void initState() {
@@ -59,6 +61,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         _product = product;
         _isOwnProduct = isOwn;
         _isLoading = false;
+        if (_selectedSize == null && product.sizes.length == 1) {
+          _selectedSize = product.sizes.first.trim();
+        }
+        if (_selectedColor == null && product.colors.length == 1) {
+          _selectedColor = product.colors.first.trim();
+        }
       });
     } on AuthApiException catch (error) {
       if (!mounted) return;
@@ -111,10 +119,29 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       _showSnack("O'zingizning mahsulotingizni sotib ololmaysiz");
       return;
     }
+    if (product.sizes.isNotEmpty) {
+      final size = _selectedSize?.trim() ?? '';
+      if (size.isEmpty) {
+        _showSnack('Razmer tanlang');
+        return;
+      }
+    }
+    if (product.colors.isNotEmpty) {
+      final color = _selectedColor?.trim() ?? '';
+      if (color.isEmpty) {
+        _showSnack('Rang tanlang');
+        return;
+      }
+    }
     final nextQty = product.cartQty > 0 ? product.cartQty + 1 : 1;
     setState(() => _isActionLoading = true);
     try {
-      final serverQty = await _productApi.addToCart(product.id, qty: nextQty);
+      final serverQty = await _productApi.addToCart(
+        product.id,
+        qty: nextQty,
+        selectedSize: _selectedSize,
+        selectedColor: _selectedColor,
+      );
       if (!mounted) return;
       setState(() {
         _product = product.copyWith(isCart: true, cartQty: serverQty);
@@ -318,11 +345,29 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               fontWeight: FontWeight.w800,
             ),
           ),
+          const SizedBox(height: 6),
+          if ((_selectedColor?.trim() ?? '').isEmpty)
+            const Text(
+              'Rang tanlang',
+              style: TextStyle(
+                color: Color(0xFFE15C5C),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: product.colors.map((c) => ColorChip(label: c)).toList(),
+            children: product.colors
+                .map(
+                  (c) => _SelectableColorChip(
+                    label: c,
+                    selected: (_selectedColor?.trim() ?? '') == c.trim(),
+                    onTap: () => setState(() => _selectedColor = c.trim()),
+                  ),
+                )
+                .toList(),
           ),
         ],
         if (product.sizes.isNotEmpty) ...[
@@ -335,31 +380,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               fontWeight: FontWeight.w800,
             ),
           ),
+          const SizedBox(height: 6),
+          if ((_selectedSize?.trim() ?? '').isEmpty)
+            const Text(
+              'Razmer tanlang',
+              style: TextStyle(
+                color: Color(0xFFE15C5C),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: product.sizes
                 .map(
-                  (s) => Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF7F8FA),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: Colors.black.withValues(alpha: 0.08),
-                      ),
-                    ),
-                    child: Text(
-                      s,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
+                  (s) => _SelectableTextChip(
+                    text: s,
+                    selected: (_selectedSize?.trim() ?? '') == s.trim(),
+                    onTap: () => setState(() => _selectedSize = s.trim()),
                   ),
                 )
                 .toList(),
@@ -431,6 +471,88 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SelectableTextChip extends StatelessWidget {
+  final String text;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SelectableTextChip({
+    required this.text,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+    return Material(
+      color: selected ? const Color(0xFFE9F3F1) : const Color(0xFFF7F8FA),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected
+                  ? primaryGreen.withValues(alpha: 0.7)
+                  : Colors.black.withValues(alpha: 0.08),
+            ),
+          ),
+          child: Text(
+            text,
+            style: TextStyle(
+              color: selected ? primaryGreen : const Color(0xFF2B2E31),
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectableColorChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SelectableColorChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+    return Material(
+      color: selected ? const Color(0xFFE9F3F1) : Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(1.5),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected
+                  ? primaryGreen.withValues(alpha: 0.65)
+                  : Colors.transparent,
+              width: 1.2,
+            ),
+          ),
+          child: ColorChip(label: label),
+        ),
+      ),
     );
   }
 }

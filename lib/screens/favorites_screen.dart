@@ -72,6 +72,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 
   Future<void> _addToCart(Product product) async {
+    if (product.sizes.isNotEmpty || product.colors.isNotEmpty) {
+      await _openProductDetail(product);
+      return;
+    }
     final qty = product.cartQty > 0 ? product.cartQty + 1 : 1;
     try {
       await _productApi.addToCart(product.id, qty: qty);
@@ -282,7 +286,7 @@ class _FavProductCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     child: ProductImage(
                       path: item.resolvedImagePath,
-                      height: 92,
+                      height: 110,
                     ),
                   ),
                   Padding(

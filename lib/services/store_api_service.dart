@@ -203,6 +203,18 @@ class StoreApiService {
         .toList();
   }
 
+  Future<int> getMyStoresOrdersBadge() async {
+    final data = await _send('GET', '/me/stores/badge');
+    final badges = data['badges'];
+    if (badges is Map<String, dynamic>) {
+      final orders = badges['orders'];
+      if (orders is int) return orders;
+      if (orders is num) return orders.toInt();
+      return int.tryParse(orders?.toString() ?? '') ?? 0;
+    }
+    return 0;
+  }
+
   Future<StoreDetails> getMyStore(String id) async {
     final data = await _send('GET', '/me/stores/$id');
     final raw = data['store'];

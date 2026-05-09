@@ -124,15 +124,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     switch (status.trim().toLowerCase()) {
       case 'pending':
         return 'Kutilmoqda';
+      case 'preparing':
+        return 'Tayyorlanmoqda';
       case 'accepted':
       case 'confirmed':
         return 'Qabul qilindi';
       case 'delivering':
       case 'shipped':
-        return 'Yetkazilmoqda';
+        return 'Tayyor';
       case 'completed':
       case 'delivered':
-        return 'Yakunlandi';
+        return 'Buyurtma olindi';
       case 'rejected':
         return 'Rad etildi';
       case 'canceled':
@@ -172,6 +174,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final hh = local.hour.toString().padLeft(2, '0');
     final min = local.minute.toString().padLeft(2, '0');
     return '$dd.$mm.$yy  $hh:$min';
+  }
+
+  String _readyAtLabel(OrderModel order) {
+    final status = order.status.trim().toLowerCase();
+    final readyStatuses = {'delivering', 'shipped', 'delivered', 'completed'};
+    final dt = readyStatuses.contains(status)
+        ? order.updatedAt
+        : order.createdAt;
+    final text = _dateLabel(dt);
+    if (text.isEmpty) return '';
+    return "Buyurtma tayyor bo'lgan sana: $text";
   }
 
   String _paymentLabel(String raw) {
@@ -344,7 +357,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               children: [
                                 if (_dateLabel(order.createdAt).isNotEmpty)
                                   Text(
-                                    'Buyurtma qabul qilingan sana: ${_dateLabel(order.createdAt)}',
+                                    _readyAtLabel(order),
                                     style: const TextStyle(
                                       color: Color(0xFF8A9A97),
                                       fontSize: 12,
@@ -581,6 +594,86 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
+                                        if (it.selectedColor
+                                                .trim()
+                                                .isNotEmpty ||
+                                            it.selectedSize
+                                                .trim()
+                                                .isNotEmpty) ...[
+                                          const SizedBox(height: 6),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: [
+                                              if (it.selectedColor
+                                                  .trim()
+                                                  .isNotEmpty)
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 8,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(
+                                                      0xFFF7F8FA,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          999,
+                                                        ),
+                                                    border: Border.all(
+                                                      color: Colors.black
+                                                          .withValues(
+                                                            alpha: 0.08,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    'Rang: ${it.selectedColor.trim()}',
+                                                    style: const TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                ),
+                                              if (it.selectedSize
+                                                  .trim()
+                                                  .isNotEmpty)
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 8,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(
+                                                      0xFFF7F8FA,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          999,
+                                                        ),
+                                                    border: Border.all(
+                                                      color: Colors.black
+                                                          .withValues(
+                                                            alpha: 0.08,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    'Razmer: ${it.selectedSize.trim()}',
+                                                    style: const TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),

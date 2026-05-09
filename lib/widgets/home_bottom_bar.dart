@@ -5,6 +5,7 @@ class HomeBottomBar extends StatelessWidget {
   final ValueChanged<int> onTap;
   final int favoriteCount;
   final int cartCount;
+  final int profileBadgeCount;
 
   const HomeBottomBar({
     super.key,
@@ -12,6 +13,7 @@ class HomeBottomBar extends StatelessWidget {
     required this.onTap,
     this.favoriteCount = 0,
     this.cartCount = 0,
+    this.profileBadgeCount = 0,
   });
 
   @override
@@ -65,6 +67,7 @@ class HomeBottomBar extends StatelessWidget {
                 label: 'Profil',
                 color: accent,
                 active: currentIndex == 3,
+                badgeCount: profileBadgeCount,
                 onTap: () => onTap(3),
               ),
               _BarItem(

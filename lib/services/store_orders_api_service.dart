@@ -128,6 +128,21 @@ class StoreOrdersApiService {
     return OrderModel.fromJson(data);
   }
 
+  Future<OrderModel> markDelivering({
+    required String storeId,
+    required String orderId,
+  }) async {
+    final data = await _send(
+      'PATCH',
+      '/me/stores/$storeId/orders/$orderId/delivering',
+      authRequired: true,
+      body: {},
+    );
+    final rawOrder = data['order'];
+    if (rawOrder is Map<String, dynamic>) return OrderModel.fromJson(rawOrder);
+    return OrderModel.fromJson(data);
+  }
+
   Future<Map<String, dynamic>> _send(
     String method,
     String path, {

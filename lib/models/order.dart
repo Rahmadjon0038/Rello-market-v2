@@ -9,6 +9,8 @@ class OrderItemModel {
   final int qty;
   final int lineTotal;
   final int sortOrder;
+  final String selectedSize;
+  final String selectedColor;
 
   const OrderItemModel({
     required this.id,
@@ -19,6 +21,8 @@ class OrderItemModel {
     required this.qty,
     required this.lineTotal,
     required this.sortOrder,
+    required this.selectedSize,
+    required this.selectedColor,
   });
 
   factory OrderItemModel.fromJson(Map<String, dynamic> json) {
@@ -31,6 +35,10 @@ class OrderItemModel {
       qty: _intFromJson(json['qty'], fallback: 1),
       lineTotal: _intFromJson(json['lineTotal']),
       sortOrder: _intFromJson(json['sortOrder']),
+      selectedSize:
+          json['selectedSize']?.toString() ?? json['size']?.toString() ?? '',
+      selectedColor:
+          json['selectedColor']?.toString() ?? json['color']?.toString() ?? '',
     );
   }
 

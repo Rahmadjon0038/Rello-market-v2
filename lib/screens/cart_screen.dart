@@ -15,8 +15,9 @@ import 'package:latlong2/latlong.dart';
 
 class CartScreen extends StatefulWidget {
   final VoidCallback? onSummaryChanged;
+  final void Function(String categoryId)? onGoHomeToCategory;
 
-  const CartScreen({super.key, this.onSummaryChanged});
+  const CartScreen({super.key, this.onSummaryChanged, this.onGoHomeToCategory});
 
   @override
   State<CartScreen> createState() => _CartScreenState();
@@ -173,7 +174,13 @@ class _CartScreenState extends State<CartScreen> {
       _items[idx] = current.copyWith(qty: normalized);
     });
     try {
-      final serverQty = await _productApi.addToCart(id, qty: normalized);
+      final serverQty = await _productApi.addToCart(
+        id,
+        qty: normalized,
+        selected: current.selected,
+        selectedSize: current.cartSize,
+        selectedColor: current.cartColor,
+      );
       widget.onSummaryChanged?.call();
       if (!mounted) return;
       setState(() {
@@ -217,7 +224,13 @@ class _CartScreenState extends State<CartScreen> {
     });
     final item = _items.firstWhere((e) => e.id == id);
     try {
-      await _productApi.addToCart(id, qty: item.qty, selected: item.selected);
+      await _productApi.addToCart(
+        id,
+        qty: item.qty,
+        selected: item.selected,
+        selectedSize: item.cartSize,
+        selectedColor: item.cartColor,
+      );
       widget.onSummaryChanged?.call();
     } on Object {
       if (!mounted) return;
@@ -1037,6 +1050,9 @@ class _CartScreenState extends State<CartScreen> {
                 onAdd: () => _changeQty(item.id, 1),
                 onRemove: () => _changeQty(item.id, -1),
                 onDelete: () => _removeItem(item.id),
+                onCategoryTap: item.categoryId.trim().isEmpty
+                    ? null
+                    : () => widget.onGoHomeToCategory?.call(item.categoryId),
               );
             },
           ),
@@ -1213,9 +1229,10 @@ class _CartItem {
   final String imagePath;
   final List<String> images;
   final String brand;
+  final String categoryId;
   final String categoryName;
-  final List<String> sizes;
-  final List<String> colors;
+  final String cartSize;
+  final String cartColor;
   final String storeId;
 
   const _CartItem({
@@ -1228,9 +1245,10 @@ class _CartItem {
     required this.imagePath,
     required this.images,
     required this.brand,
+    required this.categoryId,
     required this.categoryName,
-    required this.sizes,
-    required this.colors,
+    required this.cartSize,
+    required this.cartColor,
     required this.storeId,
   });
 
@@ -1249,9 +1267,10 @@ class _CartItem {
       imagePath: previewImage,
       images: resolvedImages.isNotEmpty ? resolvedImages : [previewImage],
       brand: product.brand,
+      categoryId: product.categoryId,
       categoryName: product.categoryName,
-      sizes: product.sizes,
-      colors: product.colors,
+      cartSize: product.cartSize,
+      cartColor: product.cartColor,
       storeId: product.storeId,
     );
   }
@@ -1267,9 +1286,10 @@ class _CartItem {
       imagePath: imagePath,
       images: images,
       brand: brand,
+      categoryId: categoryId,
       categoryName: categoryName,
-      sizes: sizes,
-      colors: colors,
+      cartSize: cartSize,
+      cartColor: cartColor,
       storeId: storeId,
     );
   }
@@ -1281,6 +1301,7 @@ class _CartCard extends StatelessWidget {
   final VoidCallback onAdd;
   final VoidCallback onRemove;
   final VoidCallback onDelete;
+  final VoidCallback? onCategoryTap;
 
   const _CartCard({
     required this.item,
@@ -1288,6 +1309,7 @@ class _CartCard extends StatelessWidget {
     required this.onAdd,
     required this.onRemove,
     required this.onDelete,
+    this.onCategoryTap,
   });
 
   String _format(int v) {
@@ -1323,8 +1345,10 @@ class _CartCard extends StatelessWidget {
         border: Border.all(color: primaryGreen.withOpacity(0.12)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               GestureDetector(
                 onTap: () {
@@ -1378,31 +1402,6 @@ class _CartCard extends StatelessWidget {
                           fontSize: 12,
                           height: 1.2,
                         ),
-                      ),
-                    ],
-                    if (item.categoryName.trim().isNotEmpty ||
-                        item.brand.trim().isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          if (item.categoryName.trim().isNotEmpty)
-                            _MiniChip(text: item.categoryName.trim()),
-                          if (item.brand.trim().isNotEmpty)
-                            _MiniChip(text: item.brand.trim()),
-                        ],
-                      ),
-                    ],
-                    if (item.colors.isNotEmpty || item.sizes.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          ...item.colors.map((c) => ColorChip(label: c)),
-                          ...item.sizes.map((s) => _MiniChip(text: s)),
-                        ],
                       ),
                     ],
                     const SizedBox(height: 8),
@@ -1465,6 +1464,100 @@ class _CartCard extends StatelessWidget {
               ),
             ],
           ),
+          if (item.categoryName.trim().isNotEmpty ||
+              item.cartColor.trim().isNotEmpty ||
+              item.cartSize.trim().isNotEmpty ||
+              item.brand.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            if (item.categoryName.trim().isNotEmpty ||
+                item.brand.trim().isNotEmpty)
+              _CartMetaRow(
+                label: 'Kategoriya',
+                child: Row(
+                  children: [
+                    if (item.categoryName.trim().isNotEmpty)
+                      GestureDetector(
+                        onTap: onCategoryTap,
+                        child: _MiniChip(
+                          text: item.categoryName.trim(),
+                          emphasize: true,
+                        ),
+                      ),
+                    if (item.brand.trim().isNotEmpty) ...[
+                      if (item.categoryName.trim().isNotEmpty)
+                        const SizedBox(width: 6),
+                      _MiniChip(text: item.brand.trim()),
+                    ],
+                  ],
+                ),
+              ),
+            if (item.cartColor.trim().isNotEmpty)
+              _CartMetaRow(
+                label: 'Ranglar',
+                child: _HorizontalChips(
+                  children: [ColorChip(label: item.cartColor.trim())],
+                ),
+              ),
+            if (item.cartSize.trim().isNotEmpty)
+              _CartMetaRow(
+                label: 'Razmerlar',
+                child: _HorizontalChips(
+                  children: [_MiniChip(text: item.cartSize.trim())],
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CartMetaRow extends StatelessWidget {
+  final String label;
+  final Widget child;
+
+  const _CartMetaRow({required this.label, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryGreen = Color(0xFF1F5A50);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: primaryGreen.withValues(alpha: 0.7),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _HorizontalChips extends StatelessWidget {
+  final List<Widget> children;
+
+  const _HorizontalChips({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    if (children.isEmpty) return const SizedBox.shrink();
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (int i = 0; i < children.length; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            children[i],
+          ],
         ],
       ),
     );
@@ -1500,8 +1593,9 @@ class _QtyButton extends StatelessWidget {
 
 class _MiniChip extends StatelessWidget {
   final String text;
+  final bool emphasize;
 
-  const _MiniChip({required this.text});
+  const _MiniChip({required this.text, this.emphasize = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1510,7 +1604,7 @@ class _MiniChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F8FA),
+        color: emphasize ? const Color(0xFFE9F3F1) : const Color(0xFFF7F8FA),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
       ),

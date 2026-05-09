@@ -6,6 +6,7 @@ import 'package:hello_flutter_app/models/product.dart';
 import 'package:hello_flutter_app/screens/product_detail_screen.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/product_api_service.dart';
+import 'package:hello_flutter_app/utils/home_category_filter.dart';
 import 'package:hello_flutter_app/widgets/category_icon.dart';
 import 'package:hello_flutter_app/widgets/product_card.dart';
 import 'package:hello_flutter_app/widgets/product_image.dart';
@@ -45,11 +46,20 @@ class _HomeHeaderState extends State<HomeHeader>
   List<Product> _products = [];
   List<Product> _carouselProducts = [];
   List<CategoryModel> _categories = [];
+  VoidCallback? _categoryFilterListener;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _categoryFilterListener = () {
+      if (!mounted) return;
+      if (!widget.showContent) return;
+      final categoryId = HomeCategoryFilter.selectedCategoryId.value;
+      if (categoryId == _selectedCategoryId) return;
+      unawaited(_selectCategory(categoryId));
+    };
+    HomeCategoryFilter.selectedCategoryId.addListener(_categoryFilterListener!);
     _loadSession();
     _loadLang();
     _loadHomeData();
@@ -96,6 +106,11 @@ class _HomeHeaderState extends State<HomeHeader>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (_categoryFilterListener != null) {
+      HomeCategoryFilter.selectedCategoryId.removeListener(
+        _categoryFilterListener!,
+      );
+    }
     _carouselTimer?.cancel();
     _carouselController?.dispose();
     _sheetController?.dispose();
@@ -106,13 +121,20 @@ class _HomeHeaderState extends State<HomeHeader>
   void didUpdateWidget(covariant HomeHeader oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!oldWidget.showContent && widget.showContent) {
+      final categoryId = HomeCategoryFilter.selectedCategoryId.value;
+      if (categoryId != _selectedCategoryId) {
+        setState(() => _selectedCategoryId = categoryId);
+      }
       _loadHomeData();
+    } else if (oldWidget.showContent && !widget.showContent) {
+      _carouselTimer?.cancel();
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && widget.showContent) {
+      _loadSession();
       _loadHomeData();
     }
   }
@@ -258,6 +280,7 @@ class _HomeHeaderState extends State<HomeHeader>
 
   Future<void> _selectCategory(String? categoryId) async {
     if (_selectedCategoryId == categoryId) return;
+    HomeCategoryFilter.setCategory(categoryId);
     setState(() => _selectedCategoryId = categoryId);
     await _loadProducts();
   }
@@ -315,7 +338,15 @@ class _HomeHeaderState extends State<HomeHeader>
   }
 
   Future<void> _addToCart(Product product) async {
-    final sessionPhone = _session?.phone.trim() ?? '';
+    // Auth state can change from the Profile tab. Always re-check latest session
+    // before enforcing "own product" restrictions.
+    final latestSession = await _authApi.loadSavedSession();
+    if (!mounted) return;
+    if (latestSession?.phone != _session?.phone ||
+        latestSession?.role != _session?.role) {
+      setState(() => _session = latestSession);
+    }
+    final sessionPhone = latestSession?.phone.trim() ?? '';
     final sellerPhone = product.seller?.phone.trim() ?? '';
     final storePhone = product.store?.director?.phone.trim() ?? '';
     final isOwn =
@@ -324,6 +355,10 @@ class _HomeHeaderState extends State<HomeHeader>
             (storePhone.isNotEmpty && storePhone == sessionPhone));
     if (isOwn) {
       _showSnack("O'zingizning mahsulotingizni sotib ololmaysiz");
+      return;
+    }
+    if (product.sizes.isNotEmpty || product.colors.isNotEmpty) {
+      await _openProductDetail(product);
       return;
     }
     final qty = product.cartQty > 0 ? product.cartQty + 1 : 1;
@@ -397,7 +432,7 @@ class _HomeHeaderState extends State<HomeHeader>
                     borderRadius: BorderRadius.circular(14),
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: Image.asset('assets/logo.jpg', fit: BoxFit.cover),
+                  child: Image.asset('assets/logo.png', fit: BoxFit.cover),
                 ),
                 const SizedBox(width: 10),
                 const Expanded(
@@ -623,7 +658,7 @@ class _HomeHeaderState extends State<HomeHeader>
                   crossAxisCount: 2,
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
-                  childAspectRatio: 0.58,
+                  childAspectRatio: 0.62,
                 ),
                 itemBuilder: (context, index) {
                   final p = _products[index];
@@ -632,7 +667,7 @@ class _HomeHeaderState extends State<HomeHeader>
                     onTap: () => _openProductDetail(p),
                     onLike: () => _toggleLike(p),
                     onAddToCart: () => _addToCart(p),
-                    imageHeight: 130,
+                    imageHeight: 112,
                   );
                 },
               ),
@@ -644,10 +679,13 @@ class _HomeHeaderState extends State<HomeHeader>
 
   void _startCarousel() {
     _carouselTimer?.cancel();
+    if (!widget.showContent) return;
     if (_carouselProducts.isEmpty) return;
     _carouselTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!mounted) return;
+      if (!widget.showContent) return;
       if (_carouselController == null) return;
+      if (!_carouselController!.hasClients) return;
       if (_carouselProducts.isEmpty) return;
       final next = (_carouselIndex + 1) % _carouselProducts.length;
       _carouselController!.animateToPage(
@@ -785,10 +823,7 @@ class _LangOption extends StatelessWidget {
         ),
         child: Row(
           children: [
-            _LangFlag(
-              assetPath: _flagAsset(value),
-              fallbackText: value,
-            ),
+            _LangFlag(assetPath: _flagAsset(value), fallbackText: value),
             const SizedBox(width: 10),
             Text(
               label,

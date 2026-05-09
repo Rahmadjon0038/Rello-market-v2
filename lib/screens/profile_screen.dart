@@ -9,16 +9,25 @@ import 'package:hello_flutter_app/screens/auth_screen.dart';
 import 'package:hello_flutter_app/screens/my_stores_screen.dart';
 import 'package:hello_flutter_app/screens/open_store_screen.dart';
 import 'package:hello_flutter_app/screens/orders_screen.dart';
+import 'package:hello_flutter_app/services/order_api_service.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/push_api_service.dart';
 import 'package:hello_flutter_app/services/push_token_manager.dart';
+import 'package:hello_flutter_app/services/store_api_service.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onAuthCancelled;
   final VoidCallback? onAuthChanged;
+  final ValueChanged<int>? onSellerOrdersBadgeChanged;
 
-  const ProfileScreen({super.key, this.onAuthCancelled, this.onAuthChanged});
+  const ProfileScreen({
+    super.key,
+    this.onAuthCancelled,
+    this.onAuthChanged,
+    this.onSellerOrdersBadgeChanged,
+  });
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -41,6 +50,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final ImagePicker _picker = ImagePicker();
   final AuthApiService _authApi = AuthApiService();
   final PushApiService _pushApi = PushApiService();
+  final StoreApiService _storeApi = StoreApiService();
+  final OrderApiService _orderApi = OrderApiService();
+  int _sellerOrdersBadge = 0;
+  int _userReadyOrdersBadge = 0;
+  static const String _userReadySeenAtKey = 'user_orders_ready_seen_at_ms';
 
   @override
   void initState() {
@@ -60,6 +74,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _role = 'user';
         _profileImg = null;
         _avatarFile = null;
+        _sellerOrdersBadge = 0;
+        _userReadyOrdersBadge = 0;
       });
       return;
     }
@@ -71,6 +87,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _role = session.role;
       _profileImg = session.profileImg;
     });
+    _refreshSellerBadges();
+    _refreshUserOrdersBadge();
+  }
+
+  Future<void> _refreshSellerBadges() async {
+    if (!mounted) return;
+    final role = _role.trim().toLowerCase();
+    if (role != 'seller') {
+      if (_sellerOrdersBadge != 0) {
+        setState(() => _sellerOrdersBadge = 0);
+        widget.onSellerOrdersBadgeChanged?.call(0);
+      }
+      return;
+    }
+    try {
+      final count = await _storeApi.getMyStoresOrdersBadge();
+      if (!mounted) return;
+      setState(() => _sellerOrdersBadge = count);
+      widget.onSellerOrdersBadgeChanged?.call(count);
+    } on Object {
+      // best-effort
+    }
+  }
+
+  Future<void> _refreshUserOrdersBadge() async {
+    if (!mounted) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final seenAtMs = prefs.getInt(_userReadySeenAtKey) ?? 0;
+      final orders = await _orderApi.getMyOrders();
+      if (!mounted) return;
+      final count = orders.where((o) {
+        final status = o.status.trim().toLowerCase();
+        if (status != 'delivering' && status != 'shipped') return false;
+        final updated = o.updatedAt;
+        if (updated == null) return true;
+        return updated.millisecondsSinceEpoch > seenAtMs;
+      }).length;
+      if (!mounted) return;
+      setState(() => _userReadyOrdersBadge = count);
+    } on Object {
+      // best-effort
+    }
   }
 
   String _platformLabel() {
@@ -84,9 +143,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final token = session?.accessToken.trim() ?? '';
       if (token.isEmpty) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Access token topilmadi')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Access token topilmadi')));
         return;
       }
       await Clipboard.setData(ClipboardData(text: token));
@@ -131,23 +190,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             : null;
         _lastFcmTokenStatus = hasToken ? 'FCM token: OK' : 'FCM token: YO‘Q';
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Test push yuborildi (ID: $id)',
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Test push yuborildi (ID: $id)')));
     } on AuthApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } on Object {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Serverga ulanib bo'lmadi")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Serverga ulanib bo'lmadi")));
     } finally {
       if (mounted) setState(() => _isSendingPushTest = false);
     }
@@ -217,22 +272,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _logout() async {
-    if (Platform.isAndroid || Platform.isIOS) {
-      try {
-        await PushTokenManager().registerNow();
-        final token = await FirebaseMessaging.instance.getToken();
-        final trimmed = (token ?? '').trim();
-        if (trimmed.isNotEmpty) {
-          await _pushApi.unregisterDeviceToken(token: trimmed);
-        }
-      } on Object {
-        // best-effort
-      }
-    }
+    final session = await _authApi.loadSavedSession();
     await _authApi.clearSession();
     if (!mounted) return;
     _resetLoggedOutState();
     widget.onAuthChanged?.call();
+
+    // Best-effort cleanup in background; don't block logout UX.
+    final accessToken = session?.accessToken.trim() ?? '';
+    if (accessToken.isEmpty) return;
+    if (!(Platform.isAndroid || Platform.isIOS)) return;
+    Future<void>(() async {
+      try {
+        final token = await FirebaseMessaging.instance.getToken();
+        final trimmed = (token ?? '').trim();
+        if (trimmed.isEmpty) return;
+        await _pushApi.unregisterDeviceTokenWithAccessToken(
+          token: trimmed,
+          accessToken: accessToken,
+        );
+      } on Object {
+        // best-effort
+      }
+    });
   }
 
   void _resetLoggedOutState() {
@@ -244,6 +306,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _avatarFile = null;
       _profileImg = null;
       _role = 'user';
+      _sellerOrdersBadge = 0;
+      _userReadyOrdersBadge = 0;
     });
   }
 
@@ -722,11 +786,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _ActionTile(
             title: 'Mening buyurtmalarim',
             icon: Icons.receipt_long,
+            badgeCount: _userReadyOrdersBadge,
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const OrdersScreen()),
-              );
+              ).then((_) => _refreshUserOrdersBadge());
             },
           ),
           const SizedBox(height: 8),
@@ -746,11 +811,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _ActionTile(
               title: "Mening do'konlarim",
               icon: Icons.store_mall_directory_rounded,
+              badgeCount: _sellerOrdersBadge,
               onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const MyStoresScreen()),
-                );
+                ).then((_) => _refreshSellerBadges());
               },
             ),
           ],
@@ -776,7 +842,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           if (kDebugMode) const SizedBox(height: 8),
           _ActionTile(
-            title: _isSendingPushTest ? 'Push test yuborilmoqda...' : 'Push test',
+            title: _isSendingPushTest
+                ? 'Push test yuborilmoqda...'
+                : 'Push test',
             icon: Icons.notifications_active_rounded,
             onTap: _isSendingPushTest ? null : _sendPushTest,
           ),
@@ -1139,8 +1207,14 @@ class _ActionTile extends StatelessWidget {
   final String title;
   final IconData icon;
   final VoidCallback? onTap;
+  final int badgeCount;
 
-  const _ActionTile({required this.title, required this.icon, this.onTap});
+  const _ActionTile({
+    required this.title,
+    required this.icon,
+    this.onTap,
+    this.badgeCount = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1157,7 +1231,18 @@ class _ActionTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon, color: primaryGreen, size: 20),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon, color: primaryGreen, size: 20),
+                if (badgeCount > 0)
+                  Positioned(
+                    right: -8,
+                    top: -8,
+                    child: _CountBadge(count: badgeCount),
+                  ),
+              ],
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -1171,6 +1256,34 @@ class _ActionTile extends StatelessWidget {
             ),
             const Icon(Icons.chevron_right, color: primaryGreen),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CountBadge extends StatelessWidget {
+  final int count;
+
+  const _CountBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count > 99 ? '99+' : '$count';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE11D48),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white, width: 2),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          height: 1.0,
         ),
       ),
     );

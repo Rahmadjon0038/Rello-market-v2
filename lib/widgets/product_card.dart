@@ -25,7 +25,7 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF1F5A50);
     const descriptionColor = Color(0xFF1F2933);
-    final descriptionPreview = truncateWords(item.description, maxWords: 26);
+    final descriptionPreview = truncateWords(item.description, maxWords: 40);
     final nameLen = item.name.runes.length;
     final nameFontSize = nameLen > 56
         ? 11.0
@@ -85,7 +85,7 @@ class ProductCard extends StatelessWidget {
                           const SizedBox(height: 4),
                           Text(
                             descriptionPreview,
-                            maxLines: 3,
+                            maxLines: 4,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: descriptionColor.withValues(alpha: 0.72),

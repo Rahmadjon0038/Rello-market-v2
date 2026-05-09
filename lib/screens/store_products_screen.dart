@@ -148,6 +148,16 @@ class _StoreProductsScreenState extends State<StoreProductsScreen> {
       _showSnack("O'zingizning do'koningiz mahsulotini sotib ololmaysiz");
       return;
     }
+    if (product.sizes.isNotEmpty || product.colors.isNotEmpty) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ProductDetailScreen(productId: product.id),
+        ),
+      );
+      if (!mounted) return;
+      _load();
+      return;
+    }
     final qty = product.cartQty > 0 ? product.cartQty + 1 : 1;
     try {
       final serverQty = await _productApi.addToCart(product.id, qty: qty);
