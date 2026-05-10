@@ -21,9 +21,8 @@ Future<void> main() async {
         FirebaseMessaging.onBackgroundMessage(
           firebaseMessagingBackgroundHandler,
         );
-        await _tryInitPushMessaging();
       }
-      runApp(const MyApp());
+      runApp(MyApp(firebaseReady: firebaseReady));
     },
     (error, stack) {
       debugPrint('Uncaught zone error: $error');
@@ -70,8 +69,25 @@ Future<void> _tryInitPushMessaging() async {
   }
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MyApp extends StatefulWidget {
+  final bool firebaseReady;
+
+  const MyApp({super.key, required this.firebaseReady});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.firebaseReady) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _tryInitPushMessaging();
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

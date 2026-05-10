@@ -16,11 +16,13 @@ import 'package:image_picker/image_picker.dart';
 class StoreDetailScreen extends StatefulWidget {
   final String storeId;
   final StoreModel? initialStore;
+  final int initialTabIndex;
 
   const StoreDetailScreen({
     super.key,
     required this.storeId,
     this.initialStore,
+    this.initialTabIndex = 0,
   });
 
   @override
@@ -37,6 +39,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _navIndex = widget.initialTabIndex.clamp(0, 3);
     _load();
   }
 

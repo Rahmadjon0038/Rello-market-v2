@@ -5,6 +5,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:hello_flutter_app/services/auth_api_service.dart';
 import 'package:hello_flutter_app/services/push_api_service.dart';
+import 'package:hello_flutter_app/screens/order_detail_screen.dart';
+import 'package:hello_flutter_app/screens/store_detail_screen.dart';
 import 'package:hello_flutter_app/utils/app_navigator.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,6 +25,7 @@ class PushTokenManager {
     await _ensurePermission();
     await _configureForegroundPresentation();
     _listenForegroundMessages();
+    _listenNotificationTaps();
     await registerNow();
     FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
       await _registerTokenIfNeeded(token);
@@ -80,6 +83,52 @@ class PushTokenManager {
         // Ignore UI errors; foreground notifications are best-effort.
       }
     });
+  }
+
+  void _listenNotificationTaps() {
+    FirebaseMessaging.onMessageOpenedApp.listen((message) async {
+      await _handleNotificationTap(message);
+    });
+
+    // When the app is launched by tapping a notification.
+    FirebaseMessaging.instance.getInitialMessage().then((message) async {
+      if (message == null) return;
+      // Ensure navigator is ready.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _handleNotificationTap(message);
+      });
+    });
+  }
+
+  Future<void> _handleNotificationTap(RemoteMessage message) async {
+    final data = message.data;
+    if (data.isEmpty) return;
+
+    final type = (data['type'] ?? '').toString().trim();
+    final storeId = (data['storeId'] ?? '').toString().trim();
+    final orderId = (data['orderId'] ?? '').toString().trim();
+    final tab = (data['tab'] ?? '').toString().trim().toLowerCase();
+
+    final nav = AppNavigator.key.currentState;
+    if (nav == null) return;
+
+    if (type == 'order_created' && storeId.isNotEmpty) {
+      final initialTab = tab == 'orders' ? 2 : 0;
+      await nav.push(
+        MaterialPageRoute(
+          builder: (_) =>
+              StoreDetailScreen(storeId: storeId, initialTabIndex: initialTab),
+        ),
+      );
+      return;
+    }
+
+    if (type == 'order_ready' && orderId.isNotEmpty) {
+      await nav.push(
+        MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: orderId)),
+      );
+      return;
+    }
   }
 
   String _platformLabel() {
